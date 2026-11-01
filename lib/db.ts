@@ -35,7 +35,7 @@ function getStore(): BengkelStore {
   if (!globalThis.__bengkelStore) {
     globalThis.__bengkelStore = JSON.parse(JSON.stringify(initialStore));
   }
-  return globalThis.__bengkelStore;
+  return globalThis.__bengkelStore as BengkelStore;
 }
 
 export const db = {
@@ -767,7 +767,7 @@ export const db = {
     idempotencyKey?: string;
   }): Payment {
     const store = getStore();
-    const invoice = this.getInvoiceById(workshopId, data.invoiceId);
+    const invoice = store.invoices.find((i) => i.id === data.invoiceId && i.workshopId === workshopId);
     if (!invoice) throw new Error("Invoice tidak ditemukan.");
 
     // Idempotency check: prevent double payment callback processing

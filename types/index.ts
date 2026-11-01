@@ -110,7 +110,7 @@ export interface Booking {
   timeSlot: string;
   customerComplaint: string;
   status: BookingStatus;
-  estimatedCost: number;
+  estimatedCost?: number;
   adminNotes?: string;
   createdAt: string;
   updatedAt: string;
@@ -265,6 +265,7 @@ export interface InvoiceItem {
   quantity: number;
   unitPrice: number;
   totalPrice: number;
+  createdAt?: string;
 }
 
 export interface Invoice {
