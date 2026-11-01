@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { Search, Plus, Car, User, Gauge, X, AlertCircle } from "lucide-react";
@@ -26,7 +26,7 @@ export default function VehiclesPage() {
     notes: "",
   });
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [vehRes, custRes] = await Promise.all([
@@ -47,11 +47,11 @@ export default function VehiclesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [search, formData.customerId]);
 
   useEffect(() => {
     fetchData();
-  }, [search]);
+  }, [fetchData]);
 
   const handleCreateVehicle = async (e: React.FormEvent) => {
     e.preventDefault();

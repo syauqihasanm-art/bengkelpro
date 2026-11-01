@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import {
@@ -48,7 +48,7 @@ export default function InventoryPage() {
     notes: "Restock tambahan gudang",
   });
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/inventory?includeMovements=true&search=${encodeURIComponent(search)}`);
@@ -60,11 +60,11 @@ export default function InventoryPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [search]);
 
   useEffect(() => {
     fetchData();
-  }, [search]);
+  }, [fetchData]);
 
   const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();

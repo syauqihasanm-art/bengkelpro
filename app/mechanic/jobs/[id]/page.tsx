@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
@@ -27,7 +27,7 @@ export default function MechanicJobDetailPage() {
   const [inspectionText, setInspectionText] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const fetchWorkOrder = async () => {
+  const fetchWorkOrder = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/work-orders?id=${id}`);
@@ -41,11 +41,11 @@ export default function MechanicJobDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     if (id) fetchWorkOrder();
-  }, [id]);
+  }, [id, fetchWorkOrder]);
 
   const handleUpdateStatus = async (status: string) => {
     setSubmitting(true);

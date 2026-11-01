@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { Badge } from "@/components/Badge";
@@ -54,7 +54,7 @@ export default function WorkOrdersPage() {
     tax: 0,
   });
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [woRes, custRes, vehRes, prodRes] = await Promise.all([
@@ -86,11 +86,11 @@ export default function WorkOrdersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [formData.customerId]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const handleUpdateWOStatus = async (id: string, status: string, customerApproval?: string) => {
     try {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { Search, Plus, Phone, Mail, MapPin, Car, DollarSign, X, CheckCircle2, AlertCircle } from "lucide-react";
@@ -22,7 +22,7 @@ export default function CustomersPage() {
     notes: "",
   });
 
-  const fetchCustomers = async () => {
+  const fetchCustomers = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/customers?search=${encodeURIComponent(search)}`);
@@ -33,11 +33,11 @@ export default function CustomersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [search]);
 
   useEffect(() => {
     fetchCustomers();
-  }, [search]);
+  }, [fetchCustomers]);
 
   const handleCreateCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
