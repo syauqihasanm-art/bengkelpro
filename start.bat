@@ -70,11 +70,13 @@ echo [4/4] Memulai BengkelPro Development Server...
 echo.
 echo ==============================================================================
 echo   Aplikasi dapat diakses melalui browser:
-echo   - Beranda Publik    : http://localhost:3000
+echo   - Komputer Lokal    : http://localhost:3000
+echo   - HP / Tablet (Wi-Fi): http://10.100.17.166:3000
 echo   - Portal Masuk      : http://localhost:3000/login
 echo   - Booking Online    : http://localhost:3000/booking/sahabat-motor
 echo   - Status Sistem     : http://localhost:3000/api/health
 echo ==============================================================================
+echo   Untuk akses 24 jam non-stop dari internet, baca: DEPLOY_24JAM.md
 echo   Tekan Ctrl+C untuk menghentikan server.
 echo ==============================================================================
 echo.
