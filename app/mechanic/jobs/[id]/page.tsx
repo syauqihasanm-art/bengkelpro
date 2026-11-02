@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   AlertCircle,
   Package,
+  X,
 } from "lucide-react";
 import { formatIndonesianDate, formatRupiah } from "@/lib/utils";
 
@@ -26,6 +27,8 @@ export default function MechanicJobDetailPage() {
   const [loading, setLoading] = useState(true);
   const [inspectionText, setInspectionText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [notification, setNotification] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const fetchWorkOrder = useCallback(async () => {
     setLoading(true);
@@ -49,6 +52,7 @@ export default function MechanicJobDetailPage() {
 
   const handleUpdateStatus = async (status: string) => {
     setSubmitting(true);
+    setErrorMsg(null);
     try {
       const res = await fetch("/api/work-orders", {
         method: "PATCH",
@@ -63,10 +67,39 @@ export default function MechanicJobDetailPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Gagal memperbarui status SPK");
 
-      alert(`Status SPK berhasil diperbarui menjadi ${status.toUpperCase()}`);
+      setNotification(`Status SPK berhasil diperbarui menjadi ${status.toUpperCase()}!`);
+      setTimeout(() => setNotification(null), 4000);
       fetchWorkOrder();
     } catch (err: any) {
-      alert(err.message || "Gagal memperbarui status SPK");
+      setErrorMsg(err.message || "Gagal memperbarui status SPK");
+      setTimeout(() => setErrorMsg(null), 4000);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSaveNotesOnly = async () => {
+    setSubmitting(true);
+    setErrorMsg(null);
+    try {
+      const res = await fetch("/api/work-orders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id,
+          status: workOrder?.status || "in_progress",
+          notes: inspectionText,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Gagal menyimpan temuan");
+
+      setNotification("Catatan temuan inspeksi mekanik berhasil disimpan!");
+      setTimeout(() => setNotification(null), 4000);
+    } catch (err: any) {
+      setErrorMsg(err.message || "Gagal menyimpan catatan inspeksi");
+      setTimeout(() => setErrorMsg(null), 4000);
     } finally {
       setSubmitting(false);
     }
@@ -92,7 +125,35 @@ export default function MechanicJobDetailPage() {
             <span>Kembali ke Daftar Pekerjaan</span>
           </button>
 
-          {workOrder && (
+          {notification && (
+            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 flex items-center justify-between shadow-xs">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>{notification}</span>
+              </div>
+              <button onClick={() => setNotification(null)} className="text-emerald-700 hover:text-emerald-900">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {errorMsg && (
+            <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-xs font-bold text-red-800 flex items-center justify-between shadow-xs">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600" />
+                <span>{errorMsg}</span>
+              </div>
+              <button onClick={() => setErrorMsg(null)} className="text-red-700 hover:text-red-900">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="text-center py-12 text-bengkel-muted text-xs">
+              Memuat lembar pengerjaan servis...
+            </div>
+          ) : workOrder && (
             <div className="bg-white rounded-2xl p-6 sm:p-8 border border-bengkel-border shadow-xs space-y-6">
               {/* Header Status Bar */}
               <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 pb-4">
@@ -134,10 +195,20 @@ export default function MechanicJobDetailPage() {
               </div>
 
               {/* Inspection Findings Input */}
-              <div>
-                <h4 className="text-xs font-bold text-bengkel-navy uppercase tracking-wider mb-1.5">
-                  Catatan Temuan Inspeksi Mekanik:
-                </h4>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-bengkel-navy uppercase tracking-wider">
+                    Catatan Temuan Inspeksi Mekanik:
+                  </h4>
+                  <button
+                    onClick={handleSaveNotesOnly}
+                    disabled={submitting}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-bengkel-orange hover:text-bengkel-orange-hover"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Simpan Catatan</span>
+                  </button>
+                </div>
                 <textarea
                   rows={3}
                   value={inspectionText}

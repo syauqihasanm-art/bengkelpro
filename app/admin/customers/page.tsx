@@ -1,8 +1,6 @@
 "use client";
+import { CustomersView } from "@/components/views/CustomersView";
 
-import CustomersPage from "@/app/owner/customers/page";
-
-// Export Customer Management view for Admin role
 export default function AdminCustomers() {
-  return <CustomersPage />;
+  return <CustomersView role="workshop_admin" userName="Dewi Lestari" />;
 }

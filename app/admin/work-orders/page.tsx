@@ -1,3 +1,6 @@
 "use client";
-import WorkOrdersPage from "@/app/owner/work-orders/page";
-export default function AdminWorkOrders() { return <WorkOrdersPage />; }
+import { WorkOrdersView } from "@/components/views/WorkOrdersView";
+
+export default function AdminWorkOrders() {
+  return <WorkOrdersView role="workshop_admin" userName="Dewi Lestari" />;
+}

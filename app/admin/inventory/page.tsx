@@ -1,3 +1,6 @@
 "use client";
-import InventoryPage from "@/app/owner/inventory/page";
-export default function AdminInventory() { return <InventoryPage />; }
+import { InventoryView } from "@/components/views/InventoryView";
+
+export default function AdminInventory() {
+  return <InventoryView role="workshop_admin" userName="Dewi Lestari" />;
+}

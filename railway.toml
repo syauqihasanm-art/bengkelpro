@@ -1,0 +1,14 @@
+# BengkelPro Railway Production Deployment Configuration
+# Configured for persistent 24/7 continuous operation
+
+[build]
+builder = "NIXPACKS"
+buildCommand = "npm run build"
+
+[deploy]
+startCommand = "npm run start"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 100
+restartPolicyType = "ALWAYS"
+restartPolicyMaxRetries = 10
+sleepApplication = false

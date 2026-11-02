@@ -23,6 +23,8 @@ export async function GET() {
   return NextResponse.json(
     {
       status: isHealthy ? "ok" : "degraded",
+      health: isHealthy ? "healthy" : "degraded",
+      application: "BengkelPro",
       timestamp: new Date().toISOString(),
       service: "BengkelPro Workshop Management System",
       version: "1.0.0",

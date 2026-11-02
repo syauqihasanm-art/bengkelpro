@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.env*.local
+test-results
+tests
+coverage
+README.md
+RUN_BENGKELPRO.md
+DEPLOY_24JAM.md
+start.bat
+stop.bat

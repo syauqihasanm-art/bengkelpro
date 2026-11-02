@@ -1,3 +1,6 @@
 "use client";
-import SettingsPage from "@/app/owner/settings/page";
-export default function AdminSettings() { return <SettingsPage />; }
+import { SettingsView } from "@/components/views/SettingsView";
+
+export default function AdminSettings() {
+  return <SettingsView role="workshop_admin" userName="Dewi Lestari" />;
+}

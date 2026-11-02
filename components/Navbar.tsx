@@ -12,6 +12,7 @@ export function Navbar() {
 
   const navLinks = [
     { label: "Beranda", href: "/" },
+    { label: "⚡ Pusat Fitur (1-Klik)", href: "/#pusat-fitur" },
     { label: "Fitur Lengkap", href: "/features" },
     { label: "Paket Harga", href: "/pricing" },
     { label: "Tentang Kami", href: "/about" },

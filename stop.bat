@@ -20,7 +20,7 @@ goto :done
 
 :kill
 echo [INFO] Menemukan proses server BengkelPro dengan PID: %PID%
-taskkill /F /PID %PID% >nul 2>&1
+taskkill /f /t /pid %PID% >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
     echo [SUKSES] Server BengkelPro berhasil dihentikan secara aman.
 ) else (

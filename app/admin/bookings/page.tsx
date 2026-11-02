@@ -1,3 +1,6 @@
 "use client";
-import BookingsPage from "@/app/owner/bookings/page";
-export default function AdminBookings() { return <BookingsPage />; }
+import { BookingsView } from "@/components/views/BookingsView";
+
+export default function AdminBookings() {
+  return <BookingsView role="workshop_admin" userName="Dewi Lestari" />;
+}

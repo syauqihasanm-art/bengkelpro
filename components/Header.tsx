@@ -3,18 +3,28 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, Search, Shield, ChevronDown, Check } from "lucide-react";
+import { Bell, Shield, ChevronDown, Check, Menu } from "lucide-react";
 import { UserRole } from "@/types";
 
 interface HeaderProps {
   title: string;
   subtitle?: string;
   currentRole: UserRole;
+  userName?: string;
+  onToggleSidebar?: () => void;
 }
 
-export function Header({ title, subtitle, currentRole }: HeaderProps) {
+export function Header({ title, subtitle, currentRole, userName, onToggleSidebar }: HeaderProps) {
   const router = useRouter();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  const handleToggleSidebar = () => {
+    if (onToggleSidebar) {
+      onToggleSidebar();
+    } else if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("toggle-mobile-sidebar"));
+    }
+  };
 
   const roles: { role: UserRole; label: string; path: string }[] = [
     { role: "workshop_owner", label: "Owner (Budi Santoso)", path: "/owner/dashboard" },
@@ -25,10 +35,20 @@ export function Header({ title, subtitle, currentRole }: HeaderProps) {
   ];
 
   return (
-    <header className="h-16 bg-white border-b border-bengkel-border px-6 flex items-center justify-between sticky top-0 z-30 shadow-2xs">
-      <div>
-        <h1 className="text-lg font-bold text-bengkel-navy tracking-tight">{title}</h1>
-        {subtitle && <p className="text-xs text-bengkel-muted">{subtitle}</p>}
+    <header className="h-16 bg-white border-b border-bengkel-border px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-2xs">
+      <div className="flex items-center gap-3 min-w-0">
+        <button
+          type="button"
+          onClick={handleToggleSidebar}
+          className="md:hidden p-2 -ml-2 rounded-lg text-bengkel-navy hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-bengkel-orange flex-shrink-0"
+          aria-label="Buka Menu Navigasi"
+        >
+          <Menu className="w-5 h-5 text-bengkel-navy" />
+        </button>
+        <div className="min-w-0">
+          <h1 className="text-base sm:text-lg font-bold text-bengkel-navy tracking-tight truncate">{title}</h1>
+          {subtitle && <p className="text-xs text-bengkel-muted truncate hidden sm:block">{subtitle}</p>}
+        </div>
       </div>
 
       <div className="flex items-center gap-4">

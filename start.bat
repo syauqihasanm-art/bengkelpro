@@ -65,24 +65,49 @@ if not exist "node_modules\" (
 )
 echo.
 
-REM 4. Menjalankan server development Next.js
-echo [4/4] Memulai BengkelPro Development Server...
+REM 4. Pilihan Mode Menjalankan Aplikasi
+echo [4/4] Pilih Mode Menjalankan BengkelPro:
 echo.
+echo   [1] Mode Lokal & Wi-Fi Kantor / Rumah (Default)
+echo   [2] Mode Online Publik 24 Jam (Cloudflare Tunnel - Langsung dapat link HTTPS untuk HP)
+echo   [3] Buka Panduan Cloud Deployment (Vercel + Supabase)
+echo.
+set /p "CHOICE=Masukkan pilihan Anda (1/2/3, default 1): "
+
+if "%CHOICE%"=="2" (
+    call "%~dp0start-online-24jam.bat"
+    exit /b 0
+)
+
+if "%CHOICE%"=="3" (
+    start notepad "%~dp0DEPLOY_24JAM.md"
+    exit /b 0
+)
+
+echo.
+echo Memulai BengkelPro Mode Lokal & Wi-Fi...
+
+set "DETECTED_IP=127.0.0.1"
+for /f "tokens=*" %%i in ('node -e "const os = require('os'); const nets = os.networkInterfaces(); for (const k in nets) for (const n of nets[k]) if (n.family === 'IPv4' && !n.internal && !n.address.startsWith('169.254')) { console.log(n.address); process.exit(0); }"') do set "DETECTED_IP=%%i"
+
 echo ==============================================================================
 echo   Aplikasi dapat diakses melalui browser:
 echo   - Komputer Lokal    : http://localhost:3000
-echo   - HP / Tablet (Wi-Fi): http://10.100.17.166:3000
+echo   - HP / Tablet (Wi-Fi): http://%DETECTED_IP%:3000
+echo   - Pusat Fitur (1-Klik): http://localhost:3000/#pusat-fitur
 echo   - Portal Masuk      : http://localhost:3000/login
 echo   - Booking Online    : http://localhost:3000/booking/sahabat-motor
 echo   - Status Sistem     : http://localhost:3000/api/health
 echo ==============================================================================
-echo   Untuk akses 24 jam non-stop dari internet, baca: DEPLOY_24JAM.md
+echo   Untuk mode online publik, jalankan: start-online-24jam.bat
 echo   Tekan Ctrl+C untuk menghentikan server.
 echo ==============================================================================
 echo.
 
+start http://localhost:3000
+
 set "PORT=3000"
-call npm run dev
+call npm run dev -- -H 0.0.0.0
 
 if %ERRORLEVEL% NEQ 0 (
     echo.

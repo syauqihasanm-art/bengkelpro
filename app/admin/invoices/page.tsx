@@ -1,3 +1,6 @@
 "use client";
-import InvoicesPage from "@/app/owner/invoices/page";
-export default function AdminInvoices() { return <InvoicesPage />; }
+import { InvoicesView } from "@/components/views/InvoicesView";
+
+export default function AdminInvoices() {
+  return <InvoicesView role="workshop_admin" userName="Dewi Lestari" />;
+}

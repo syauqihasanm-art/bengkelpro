@@ -43,3 +43,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: err.message || "Gagal mendaftarkan kendaraan" }, { status: 400 });
   }
 }
+
+export async function PUT(req: Request) {
+  try {
+    const body = await req.json();
+    const { id, workshopId = defaultWorkshopId, ...updates } = body;
+    if (!id) return NextResponse.json({ error: "ID kendaraan diperlukan" }, { status: 400 });
+
+    const updated = db.updateVehicle(workshopId, id, updates);
+    return NextResponse.json({ vehicle: updated });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || "Gagal memperbarui kendaraan" }, { status: 400 });
+  }
+}

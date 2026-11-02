@@ -1,14 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import {
   Wrench,
-  ShieldCheck,
-  Zap,
-  TrendingUp,
   Users,
   Package,
   Receipt,
@@ -17,14 +14,23 @@ import {
   CheckCircle2,
   ArrowRight,
   ChevronRight,
-  Smartphone,
   BarChart4,
-  Clock,
   Car,
+  LayoutDashboard,
+  UserCheck,
+  Building2,
+  Bot,
+  Settings,
+  ShieldAlert,
+  Compass,
+  TrendingDown,
+  Truck,
+  CreditCard,
 } from "lucide-react";
 import { formatRupiah } from "@/lib/utils";
 
 export default function LandingPage() {
+  const [activeRoleTab, setActiveRoleTab] = useState<"owner" | "admin" | "mechanic" | "customer" | "superadmin">("owner");
   const features = [
     {
       icon: Wrench,
@@ -245,6 +251,336 @@ export default function LandingPage() {
               <div>
                 <div className="text-3xl font-black text-bengkel-orange">AI Powered</div>
                 <div className="text-xs text-gray-300 mt-1 uppercase tracking-wider font-medium">Analisis Keluhan & Rekomendasi Servis</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* INTERACTIVE FEATURE HUB (PUSAT AKSES FITUR 1-KLIK) */}
+        <section id="pusat-fitur" className="py-16 bg-slate-50 border-b border-bengkel-border">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center max-w-3xl mx-auto mb-10 space-y-3">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-100 text-amber-900 text-xs font-bold uppercase tracking-wider border border-amber-300">
+                <Compass className="w-4 h-4 text-amber-600 animate-spin-slow" />
+                <span>Pusat Navigasi Fitur Interaktif</span>
+              </div>
+              <h2 className="text-3xl sm:text-4xl font-black text-bengkel-navy tracking-tight">
+                Pilih Peran &amp; Jalankan Fitur dengan 1-Klik
+              </h2>
+              <p className="text-sm sm:text-base text-bengkel-muted">
+                Semua fitur terhubung langsung ke data operasional. Klik tombol di bawah untuk membuka dan menguji fitur masing-masing role secara instan dari perangkat Anda.
+              </p>
+            </div>
+
+            {/* Role Tabs */}
+            <div className="flex items-center justify-start md:justify-center px-4 gap-2 pb-6 overflow-x-auto scrollbar-none">
+              {[
+                { id: "owner" as const, label: "Pemilik (Owner)", icon: "👑", count: 15 },
+                { id: "admin" as const, label: "Admin / Kasir", icon: "💼", count: 8 },
+                { id: "mechanic" as const, label: "Mekanik Bengkel", icon: "🔧", count: 4 },
+                { id: "customer" as const, label: "Pelanggan", icon: "🚗", count: 5 },
+                { id: "superadmin" as const, label: "Super Admin", icon: "🛡️", count: 4 },
+              ].map((role) => {
+                const isActive = activeRoleTab === role.id;
+                return (
+                  <button
+                    key={role.id}
+                    onClick={() => setActiveRoleTab(role.id)}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all duration-200 ${
+                      isActive
+                        ? "bg-bengkel-navy text-white shadow-lg shadow-navy-900/20 scale-[1.03] border-2 border-amber-400"
+                        : "bg-white text-bengkel-text border border-bengkel-border hover:bg-slate-100"
+                    }`}
+                  >
+                    <span className="text-base">{role.icon}</span>
+                    <span>{role.label}</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${isActive ? "bg-amber-400 text-bengkel-navy font-black" : "bg-slate-100 text-slate-500"}`}>
+                      {role.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Feature Cards Grid */}
+            <div className="bg-white p-6 sm:p-8 rounded-3xl border border-bengkel-border shadow-sm">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {activeRoleTab === "owner" && (
+                  <>
+                    <Link href="/owner/dashboard" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-orange-100 text-bengkel-orange group-hover:scale-110 transition-transform"><LayoutDashboard className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Dashboard Utama <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Ringkasan omzet, laba kotor & statistik bengkel real-time.</p>
+                      </div>
+                    </Link>
+                    <Link href="/owner/reports" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-emerald-100 text-emerald-600 group-hover:scale-110 transition-transform"><BarChart4 className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Laporan Laba Rugi <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Pendapatan, HPP part, biaya operasional & estimasi laba bersih.</p>
+                      </div>
+                    </Link>
+                    <Link href="/owner/inventory" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-blue-100 text-blue-600 group-hover:scale-110 transition-transform"><Package className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Inventaris & Stok Part <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Katalog onderdil, stok minimum & riwayat mutasi transaksional.</p>
+                      </div>
+                    </Link>
+                    <Link href="/owner/work-orders" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-amber-100 text-amber-600 group-hover:scale-110 transition-transform"><Wrench className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">SPK / Work Orders <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Kelola siklus servis dari antrean masuk hingga invoice selesai.</p>
+                      </div>
+                    </Link>
+                    <Link href="/owner/invoices" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-purple-100 text-purple-600 group-hover:scale-110 transition-transform"><Receipt className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Kasir & Faktur Invoice <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Kalkulasi jasa, part, PPN 11%, diskon & cetak invoice PDF.</p>
+                      </div>
+                    </Link>
+                    <Link href="/owner/bookings" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-rose-100 text-rose-600 group-hover:scale-110 transition-transform"><CalendarCheck className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Antrean Booking Masuk <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Daftar booking online pelanggan dengan proteksi kuota harian.</p>
+                      </div>
+                    </Link>
+                    <Link href="/owner/customers" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-teal-100 text-teal-600 group-hover:scale-110 transition-transform"><Users className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Data Pelanggan <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Buku kontak pelanggan, riwayat kunjungan & integrasi WhatsApp.</p>
+                      </div>
+                    </Link>
+                    <Link href="/owner/vehicles" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-indigo-100 text-indigo-600 group-hover:scale-110 transition-transform"><Car className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Kendaraan Terdaftar <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Registrasi plat nomor, tipe motor/mobil & histori servis.</p>
+                      </div>
+                    </Link>
+                    <Link href="/owner/mechanics" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-sky-100 text-sky-600 group-hover:scale-110 transition-transform"><UserCheck className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Kelola Mekanik <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Manajemen staf teknisi dan penugasan beban servis harian.</p>
+                      </div>
+                    </Link>
+                    <Link href="/owner/purchases" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-cyan-100 text-cyan-600 group-hover:scale-110 transition-transform"><Building2 className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Pemasok & Pembelian (PO) <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Pengadaan sparepart ke supplier dan restock gudang.</p>
+                      </div>
+                    </Link>
+                    <Link href="/owner/suppliers" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-amber-100 text-amber-600 group-hover:scale-110 transition-transform"><Truck className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Supplier & Pemasok Part <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Daftar rekanan vendor onderdil, kontak supplier & pengadaan.</p>
+                      </div>
+                    </Link>
+                    <Link href="/owner/expenses" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-red-100 text-red-600 group-hover:scale-110 transition-transform"><TrendingDown className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Pengeluaran Kas Operasional <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Catat beban operasional kas, utilitas, gaji & biaya bengkel.</p>
+                      </div>
+                    </Link>
+                    <Link href="/owner/ai-assistant" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-violet-100 text-violet-600 group-hover:scale-110 transition-transform"><Bot className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Asisten AI Otomotif <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Konsultasi kerusakan kendaraan bertenaga Google Gemini AI.</p>
+                      </div>
+                    </Link>
+                    <Link href="/owner/settings" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-slate-100 text-slate-700 group-hover:scale-110 transition-transform"><Settings className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Pengaturan Bengkel <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Atur profil, kuota harian servis, alamat & logo bengkel.</p>
+                      </div>
+                    </Link>
+                    <Link href="/owner/subscription" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-yellow-100 text-yellow-700 group-hover:scale-110 transition-transform"><CreditCard className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Paket Langganan Bengkel <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Manajemen paket Free, Basic, Pro &amp; Business serta tagihan SaaS.</p>
+                      </div>
+                    </Link>
+                  </>
+                )}
+
+                {activeRoleTab === "admin" && (
+                  <>
+                    <Link href="/admin/dashboard" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-orange-100 text-bengkel-orange group-hover:scale-110 transition-transform"><LayoutDashboard className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Dashboard Kasir <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Ringkasan transaksi kasir, antrean servis & aktivitas harian.</p>
+                      </div>
+                    </Link>
+                    <Link href="/admin/invoices" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-purple-100 text-purple-600 group-hover:scale-110 transition-transform"><Receipt className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Kasir & Faktur Pelanggan <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Proses pembayaran tunai, transfer, QRIS & cetak struk.</p>
+                      </div>
+                    </Link>
+                    <Link href="/admin/bookings" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-rose-100 text-rose-600 group-hover:scale-110 transition-transform"><CalendarCheck className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Antrean Booking Harian <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Check-in kendaraan yang datang untuk servis hari ini.</p>
+                      </div>
+                    </Link>
+                    <Link href="/admin/work-orders" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-amber-100 text-amber-600 group-hover:scale-110 transition-transform"><Wrench className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">SPK & Pengerjaan Servis <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Buat SPK baru, catat keluhan & alokasikan teknisi.</p>
+                      </div>
+                    </Link>
+                    <Link href="/admin/inventory" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-blue-100 text-blue-600 group-hover:scale-110 transition-transform"><Package className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Cek Stok Sparepart <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Lihat stok oli, busi, kampas rem & part gudang.</p>
+                      </div>
+                    </Link>
+                    <Link href="/admin/customers" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-teal-100 text-teal-600 group-hover:scale-110 transition-transform"><Users className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Database Pelanggan <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Cari data pelanggan lama atau daftarkan pelanggan baru.</p>
+                      </div>
+                    </Link>
+                    <Link href="/admin/vehicles" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-indigo-100 text-indigo-600 group-hover:scale-110 transition-transform"><Car className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Registrasi Kendaraan <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Catat plat nomor dan riwayat odometer servis.</p>
+                      </div>
+                    </Link>
+                    <Link href="/admin/settings" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-slate-100 text-slate-700 group-hover:scale-110 transition-transform"><Settings className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Pengaturan Profil Admin <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Kelola profil akun kasir, keamanan & preferensi profil.</p>
+                      </div>
+                    </Link>
+                  </>
+                )}
+
+                {activeRoleTab === "mechanic" && (
+                  <>
+                    <Link href="/mechanic/jobs" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-amber-100 text-amber-600 group-hover:scale-110 transition-transform"><Wrench className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Daftar SPK Pengerjaan Saya <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Lihat pekerjaan servis dan checklist perbaikan dari HP.</p>
+                      </div>
+                    </Link>
+                    <Link href="/mechanic/history" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-emerald-100 text-emerald-600 group-hover:scale-110 transition-transform"><CalendarCheck className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Riwayat Pekerjaan Selesai <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Arsip unit kendaraan yang telah Anda selesaikan.</p>
+                      </div>
+                    </Link>
+                    <Link href="/mechanic/dashboard" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-blue-100 text-blue-600 group-hover:scale-110 transition-transform"><LayoutDashboard className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Dashboard Kinerja Mekanik <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Pantau total servis harian dan metrik performa teknisi.</p>
+                      </div>
+                    </Link>
+                    <Link href="/mechanic/profile" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-purple-100 text-purple-600 group-hover:scale-110 transition-transform"><UserCheck className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Profil & Keahlian Mekanik <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Informasi sertifikasi dan bidang keahlian perbaikan.</p>
+                      </div>
+                    </Link>
+                  </>
+                )}
+
+                {activeRoleTab === "customer" && (
+                  <>
+                    <Link href="/booking/sahabat-motor" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-orange-100 text-bengkel-orange group-hover:scale-110 transition-transform"><CalendarCheck className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Form Booking Online Mandiri <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Pilih tanggal, jam & jenis servis langsung dari smartphone.</p>
+                      </div>
+                    </Link>
+                    <Link href="/customer/dashboard" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-blue-100 text-blue-600 group-hover:scale-110 transition-transform"><LayoutDashboard className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Status Pengerjaan Servis <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Lacak tahapan inspeksi, pengerjaan hingga unit siap diambil.</p>
+                      </div>
+                    </Link>
+                    <Link href="/customer/service-history" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-emerald-100 text-emerald-600 group-hover:scale-110 transition-transform"><Wrench className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Buku Servis Digital <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Histori penggantian oli, onderdil & kilometer kendaraan.</p>
+                      </div>
+                    </Link>
+                    <Link href="/customer/vehicles" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-indigo-100 text-indigo-600 group-hover:scale-110 transition-transform"><Car className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Garasi Kendaraan Saya <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Kelola data motor atau mobil yang terhubung ke akun Anda.</p>
+                      </div>
+                    </Link>
+                    <Link href="/customer/invoices" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-purple-100 text-purple-600 group-hover:scale-110 transition-transform"><Receipt className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Faktur & Bukti Pembayaran <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Lihat dan unduh struk pembayaran digital resmi.</p>
+                      </div>
+                    </Link>
+                  </>
+                )}
+
+                {activeRoleTab === "superadmin" && (
+                  <>
+                    <Link href="/super-admin/dashboard" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-rose-100 text-rose-600 group-hover:scale-110 transition-transform"><LayoutDashboard className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Dashboard Monitoring Global <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Statistik ekosistem platform seluruh bengkel di Indonesia.</p>
+                      </div>
+                    </Link>
+                    <Link href="/super-admin/registrations" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-amber-100 text-amber-600 group-hover:scale-110 transition-transform"><Building2 className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Persetujuan Bengkel Baru <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Review verifikasi berkas dan aktivasi bengkel baru.</p>
+                      </div>
+                    </Link>
+                    <Link href="/super-admin/audit-logs" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-slate-100 text-slate-700 group-hover:scale-110 transition-transform"><ShieldAlert className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Audit Log Keamanan <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Rekam jejak login, perubahan data & keamanan sistem.</p>
+                      </div>
+                    </Link>
+                    <Link href="/super-admin/users" className="p-4 rounded-2xl border border-bengkel-border hover:border-bengkel-orange hover:bg-orange-50/30 transition-all group flex items-start gap-3">
+                      <div className="p-3 rounded-xl bg-teal-100 text-teal-600 group-hover:scale-110 transition-transform"><Users className="w-5 h-5" /></div>
+                      <div>
+                        <div className="text-sm font-bold text-bengkel-navy group-hover:text-bengkel-orange flex items-center gap-1">Pengguna Seluruh Platform <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" /></div>
+                        <p className="text-xs text-bengkel-muted mt-1">Direktori terpusat akun owner, kasir, mekanik & pelanggan.</p>
+                      </div>
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
           </div>

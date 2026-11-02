@@ -1,3 +1,6 @@
 "use client";
-import VehiclesPage from "@/app/owner/vehicles/page";
-export default function AdminVehicles() { return <VehiclesPage />; }
+import { VehiclesView } from "@/components/views/VehiclesView";
+
+export default function AdminVehicles() {
+  return <VehiclesView role="workshop_admin" userName="Dewi Lestari" />;
+}

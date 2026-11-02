@@ -37,3 +37,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: err.message || "Gagal membuat customer" }, { status: 400 });
   }
 }
+
+export async function PUT(req: Request) {
+  try {
+    const body = await req.json();
+    const { id, workshopId = defaultWorkshopId, ...updates } = body;
+    if (!id) return NextResponse.json({ error: "ID pelanggan diperlukan" }, { status: 400 });
+
+    const updated = db.updateCustomer(workshopId, id, updates);
+    return NextResponse.json({ customer: updated });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || "Gagal memperbarui pelanggan" }, { status: 400 });
+  }
+}

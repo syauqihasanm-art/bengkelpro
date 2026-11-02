@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import React from "react";
+import { QuickFeatureLauncher } from "@/components/QuickFeatureLauncher";
 
 export const metadata: Metadata = {
   title: "BengkelPro — Smart Automotive Workshop Management System",
@@ -17,11 +18,12 @@ export default function RootLayout({
   return (
     <html lang="id" className="h-full">
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔧</text></svg>" />
       </head>
       <body className="min-h-full flex flex-col bg-bengkel-bg text-bengkel-text antialiased">
         {children}
+        <QuickFeatureLauncher />
       </body>
     </html>
   );
