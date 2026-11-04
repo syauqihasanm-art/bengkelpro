@@ -287,6 +287,14 @@ export interface Invoice {
   notes?: string;
   items?: InvoiceItem[];
   payments?: Payment[];
+  workOrder?: WorkOrder;
+  vehicle?: {
+    id?: string;
+    brand: string;
+    model: string;
+    licensePlate: string;
+    productionYear?: number;
+  };
   createdAt: string;
   updatedAt: string;
 }

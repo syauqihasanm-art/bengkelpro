@@ -24,6 +24,14 @@ export default function CustomerInvoicesPage() {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
+    const vehicleInfo = invoice.vehicle
+      ? `${invoice.vehicle.brand} ${invoice.vehicle.model} (${invoice.vehicle.licensePlate})`
+      : invoice.workOrder?.vehicle
+      ? `${invoice.workOrder.vehicle.brand} ${invoice.workOrder.vehicle.model} (${invoice.workOrder.vehicle.licensePlate})`
+      : invoice.customerName
+      ? `Kendaraan ${invoice.customerName}`
+      : "Kendaraan Pelanggan";
+
     printWindow.document.write(`
       <html>
         <head>
@@ -55,7 +63,7 @@ export default function CustomerInvoicesPage() {
 
           <div>
             <strong>Pelanggan:</strong> ${invoice.customerName || "Rudi Hermawan (0812-9876-5432)"}<br/>
-            <strong>Kendaraan:</strong> Honda Vario 160 (B 1234 XYZ)
+            <strong>Kendaraan:</strong> ${vehicleInfo}
           </div>
 
           <table>

@@ -7,7 +7,7 @@ import { Header } from "@/components/Header";
 import { Car, Gauge, Plus, Calendar, X, AlertCircle, CheckCircle2, ArrowRight } from "lucide-react";
 import { formatIndonesianDate } from "@/lib/utils";
 
-const defaultCustomerId = "c1111111-1111-4111-8111-111111111111"; // Rudi Hermawan
+const defaultCustomerId = "55555555-5555-4555-8555-555555555555"; // Rudi Hermawan
 
 export default function CustomerVehiclesPage() {
   const [vehicles, setVehicles] = useState<any[]>([]);

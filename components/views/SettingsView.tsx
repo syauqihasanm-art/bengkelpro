@@ -17,20 +17,65 @@ export function SettingsView({
 }: SettingsViewProps) {
   const [workshop, setWorkshop] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "Bengkel Sahabat Motor",
+    phone: "081234567890",
+    address: "Jl. Fatmawati Raya No. 45",
+    city: "Jakarta Selatan",
+    capacityPerDay: 20,
+  });
 
   useEffect(() => {
     fetch("/api/workshops?slug=sahabat-motor")
       .then((res) => res.json())
-      .then((data) => setWorkshop(data.workshop))
+      .then((data) => {
+        if (data.workshop) {
+          setWorkshop(data.workshop);
+          setFormData({
+            name: data.workshop.name || "Bengkel Sahabat Motor",
+            phone: data.workshop.phone || "081234567890",
+            address: data.workshop.address || "Jl. Fatmawati Raya No. 45",
+            city: data.workshop.city || "Jakarta Selatan",
+            capacityPerDay: data.workshop.capacityPerDay || 20,
+          });
+        }
+      })
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
   }, []);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    if (!workshop?.id) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/workshops", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: workshop.id,
+          name: formData.name,
+          phone: formData.phone,
+          address: formData.address,
+          city: formData.city,
+          capacityPerDay: Number(formData.capacityPerDay),
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.workshop) {
+          setWorkshop(data.workshop);
+        }
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+      }
+    } catch (err) {
+      console.error("Failed to update workshop:", err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -80,7 +125,9 @@ export function SettingsView({
                   </label>
                   <input
                     type="text"
-                    defaultValue={workshop?.name || "Bengkel Sahabat Motor"}
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    required
                     className="w-full px-3.5 py-2.5 rounded-xl border border-bengkel-border text-xs focus:outline-none focus:border-bengkel-orange"
                   />
                 </div>
@@ -91,7 +138,9 @@ export function SettingsView({
                   </label>
                   <input
                     type="tel"
-                    defaultValue={workshop?.phone || "081234567890"}
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    required
                     className="w-full px-3.5 py-2.5 rounded-xl border border-bengkel-border text-xs focus:outline-none focus:border-bengkel-orange"
                   />
                 </div>
@@ -102,7 +151,9 @@ export function SettingsView({
                   </label>
                   <input
                     type="text"
-                    defaultValue={workshop?.address || "Jl. Fatmawati Raya No. 45"}
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    required
                     className="w-full px-3.5 py-2.5 rounded-xl border border-bengkel-border text-xs focus:outline-none focus:border-bengkel-orange"
                   />
                 </div>
@@ -113,7 +164,9 @@ export function SettingsView({
                   </label>
                   <input
                     type="text"
-                    defaultValue={workshop?.city || "Jakarta Selatan"}
+                    value={formData.city}
+                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                    required
                     className="w-full px-3.5 py-2.5 rounded-xl border border-bengkel-border text-xs focus:outline-none focus:border-bengkel-orange"
                   />
                 </div>
@@ -126,7 +179,9 @@ export function SettingsView({
                     type="number"
                     min={5}
                     max={100}
-                    defaultValue={workshop?.capacityPerDay || 20}
+                    value={formData.capacityPerDay}
+                    onChange={(e) => setFormData({ ...formData, capacityPerDay: Number(e.target.value) })}
+                    required
                     className="w-full px-3.5 py-2.5 rounded-xl border border-bengkel-border text-xs focus:outline-none focus:border-bengkel-orange font-bold text-bengkel-navy"
                   />
                 </div>
@@ -135,10 +190,11 @@ export function SettingsView({
               <div className="pt-4 border-t border-gray-100 flex justify-end">
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-bengkel-orange hover:bg-bengkel-orange-hover text-white font-bold text-xs shadow-md shadow-orange-500/20 transition-all flex items-center gap-1.5"
+                  disabled={saving}
+                  className="px-6 py-2.5 rounded-xl bg-bengkel-orange hover:bg-bengkel-orange-hover text-white font-bold text-xs shadow-md shadow-orange-500/20 transition-all flex items-center gap-1.5 disabled:opacity-50"
                 >
                   <Save className="w-4 h-4" />
-                  <span>Simpan Perubahan</span>
+                  <span>{saving ? "Menyimpan..." : "Simpan Perubahan"}</span>
                 </button>
               </div>
             </form>

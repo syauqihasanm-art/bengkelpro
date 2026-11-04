@@ -104,12 +104,16 @@ export function QuickFeatureLauncher() {
       { name: "Buku Servis Digital & Histori", href: "/customer/service-history", icon: Wrench, desc: "Catatan riwayat ganti oli, part, dan servis berkala" },
       { name: "Garasi Kendaraan Terdaftar", href: "/customer/vehicles", icon: Car, desc: "Kelola data motor atau mobil yang Anda miliki" },
       { name: "Faktur & Riwayat Pembayaran", href: "/customer/invoices", icon: Receipt, desc: "Unduh kwitansi digital dan bukti pembayaran resmi" },
+      { name: "Profil & Preferensi Pelanggan", href: "/customer/profile", icon: UserCheck, desc: "Kelola data kontak dan preferensi notifikasi Anda" },
     ],
     superadmin: [
       { name: "Dashboard Ekosistem Platform", href: "/super-admin/dashboard", icon: LayoutDashboard, desc: "Statistik global seluruh bengkel terdaftar di Indonesia" },
+      { name: "Direktori Seluruh Tenant Bengkel", href: "/super-admin/workshops", icon: Building2, desc: "Database seluruh mitra bengkel aktif dan terdaftar" },
       { name: "Persetujuan Bengkel Baru", href: "/super-admin/registrations", icon: Building2, desc: "Verifikasi dan aktivasi bengkel yang baru mendaftar" },
-      { name: "Audit Log & Jejak Keamanan", href: "/super-admin/audit-logs", icon: ShieldAlert, desc: "Monitoring aktivitas login dan integritas data sistem" },
+      { name: "Langganan & Billing Global", href: "/super-admin/subscriptions", icon: CreditCard, desc: "Monitoring paket subscription dan recurring revenue bengkel" },
       { name: "Kelola Pengguna & Hak Akses", href: "/super-admin/users", icon: Users, desc: "Daftar seluruh akun pemilik, admin, teknisi & user" },
+      { name: "Audit Log & Jejak Keamanan", href: "/super-admin/audit-logs", icon: ShieldAlert, desc: "Monitoring aktivitas login dan integritas data sistem" },
+      { name: "Pengaturan & Konfigurasi Platform", href: "/super-admin/settings", icon: Settings, desc: "Konfigurasi tarif platform, batas kuota, dan kebijakan sistem" },
     ],
   };
 

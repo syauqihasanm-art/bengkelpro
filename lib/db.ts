@@ -93,6 +93,13 @@ export const db = {
     return workshop;
   },
 
+  updateWorkshop(id: string, updates: Partial<Workshop>): Workshop {
+    const workshop = this.getWorkshopById(id);
+    if (!workshop) throw new Error("Workshop not found");
+    Object.assign(workshop, updates, { updatedAt: new Date().toISOString() });
+    return workshop;
+  },
+
   // ==========================================
   // CUSTOMERS
   // ==========================================
@@ -739,17 +746,48 @@ export const db = {
   // INVOICES & PAYMENTS
   // ==========================================
   getInvoices(workshopId: string): Invoice[] {
-    return getStore()
+    const store = getStore();
+    return store
       .invoices.filter((inv) => inv.workshopId === workshopId)
+      .map((inv) => {
+        const wo = inv.workOrderId ? store.workOrders.find((w) => w.id === inv.workOrderId) : undefined;
+        const vehicle = wo ? store.vehicles.find((v) => v.id === wo.vehicleId) : undefined;
+        return {
+          ...inv,
+          workOrder: wo,
+          vehicle: vehicle
+            ? {
+                id: vehicle.id,
+                brand: vehicle.brand,
+                model: vehicle.model,
+                licensePlate: vehicle.licensePlate,
+                productionYear: vehicle.productionYear,
+              }
+            : undefined,
+        };
+      })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   },
 
   getInvoiceById(workshopId: string, id: string): Invoice | undefined {
-    const inv = getStore().invoices.find((i) => i.id === id && i.workshopId === workshopId);
+    const store = getStore();
+    const inv = store.invoices.find((i) => i.id === id && i.workshopId === workshopId);
     if (!inv) return undefined;
+    const wo = inv.workOrderId ? store.workOrders.find((w) => w.id === inv.workOrderId) : undefined;
+    const vehicle = wo ? store.vehicles.find((v) => v.id === wo.vehicleId) : undefined;
     return {
       ...inv,
-      payments: getStore().payments.filter((p) => p.invoiceId === inv.id),
+      payments: store.payments.filter((p) => p.invoiceId === inv.id),
+      workOrder: wo,
+      vehicle: vehicle
+        ? {
+            id: vehicle.id,
+            brand: vehicle.brand,
+            model: vehicle.model,
+            licensePlate: vehicle.licensePlate,
+            productionYear: vehicle.productionYear,
+          }
+        : undefined,
     };
   },
 

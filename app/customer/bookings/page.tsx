@@ -8,7 +8,7 @@ import { Calendar, Clock, CheckCircle2, ArrowRight, Plus, X, AlertCircle } from 
 import { formatIndonesianDate } from "@/lib/utils";
 
 const defaultWorkshopId = "11111111-1111-4111-8111-111111111111";
-const defaultCustomerId = "c1111111-1111-4111-8111-111111111111";
+const defaultCustomerId = "55555555-5555-4555-8555-555555555555";
 
 export default function CustomerBookingsPage() {
   const [bookings, setBookings] = useState<any[]>([]);
