@@ -60,7 +60,15 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   try {
     const body = await req.json();
-    const { id, status, notes, workshopId = defaultWorkshopId, customerApprovalStatus } = body;
+    const {
+      id,
+      status,
+      notes,
+      workshopId = defaultWorkshopId,
+      customerApprovalStatus,
+      inspectionFindings,
+      addItem,
+    } = body;
 
     if (!id) {
       return NextResponse.json({ error: "ID SPK wajib disertakan" }, { status: 400 });
@@ -78,11 +86,21 @@ export async function PATCH(req: Request) {
       }
     }
 
+    if (inspectionFindings !== undefined) {
+      wo.inspectionFindings = inspectionFindings;
+      wo.updatedAt = new Date().toISOString();
+    }
+
+    if (addItem) {
+      db.addWorkOrderItem(workshopId, id, addItem);
+    }
+
     if (status) {
       db.updateWorkOrderStatus(workshopId, id, status, notes);
     }
 
-    return NextResponse.json({ workOrder: wo });
+    const updated = db.getWorkOrderById(workshopId, id);
+    return NextResponse.json({ workOrder: updated || wo });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Gagal memperbarui SPK" }, { status: 400 });
   }

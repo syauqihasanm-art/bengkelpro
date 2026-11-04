@@ -24,8 +24,30 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const validated = paymentSchema.parse(body);
     const workshopId = body.workshopId || defaultWorkshopId;
+
+    // Direct Invoice Generation or Creation
+    if (body.action === "create" || body.workOrderId || (body.items && body.items.length > 0)) {
+      if (body.workOrderId) {
+        const inv = db.generateInvoiceFromWorkOrder(workshopId, body.workOrderId);
+        return NextResponse.json({ invoice: inv }, { status: 201 });
+      }
+
+      if (body.items) {
+        const inv = db.createDirectInvoice(workshopId, {
+          customerId: body.customerId,
+          customerName: body.customerName,
+          items: body.items,
+          discount: body.discount,
+          tax: body.tax,
+          notes: body.notes,
+        });
+        return NextResponse.json({ invoice: inv }, { status: 201 });
+      }
+    }
+
+    // Otherwise: Record Payment
+    const validated = paymentSchema.parse(body);
 
     const payment = db.recordPayment(workshopId, {
       invoiceId: validated.invoiceId,
@@ -42,6 +64,6 @@ export async function POST(req: Request) {
     if (err.errors) {
       return NextResponse.json({ error: err.errors[0]?.message || "Validasi gagal" }, { status: 400 });
     }
-    return NextResponse.json({ error: err.message || "Gagal mencatat pembayaran" }, { status: 400 });
+    return NextResponse.json({ error: err.message || "Gagal memproses faktur/pembayaran" }, { status: 400 });
   }
 }

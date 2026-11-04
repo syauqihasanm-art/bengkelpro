@@ -54,7 +54,7 @@ export default function CustomerInvoicesPage() {
           </div>
 
           <div>
-            <strong>Pelanggan:</strong> Rudi Hermawan (0812-9876-5432)<br/>
+            <strong>Pelanggan:</strong> ${invoice.customerName || "Rudi Hermawan (0812-9876-5432)"}<br/>
             <strong>Kendaraan:</strong> Honda Vario 160 (B 1234 XYZ)
           </div>
 
@@ -68,12 +68,12 @@ export default function CustomerInvoicesPage() {
               </tr>
             </thead>
             <tbody>
-              ${(invoice.workOrder?.items || []).map((it: any) => `
+              ${(invoice.items || invoice.workOrder?.items || []).map((it: any) => `
                 <tr>
                   <td>${it.name}</td>
                   <td class="text-right">${it.quantity}</td>
                   <td class="text-right">${formatRupiah(it.unitPrice)}</td>
-                  <td class="text-right">${formatRupiah(it.unitPrice * it.quantity)}</td>
+                  <td class="text-right">${formatRupiah(it.totalPrice || it.unitPrice * it.quantity)}</td>
                 </tr>
               `).join("") || `
                 <tr>

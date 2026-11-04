@@ -23,6 +23,7 @@ export function BookingsView({
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [notification, setNotification] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     customerId: "",
@@ -82,6 +83,43 @@ export function BookingsView({
     }
   };
 
+  const handleConvertToSPK = async (booking: any) => {
+    try {
+      const res = await fetch("/api/work-orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workshopId: "11111111-1111-4111-8111-111111111111",
+          bookingId: booking.id,
+          customerId: booking.customerId,
+          vehicleId: booking.vehicleId,
+          odometerIn: booking.vehicle?.currentOdometer || 10000,
+          customerComplaint: booking.customerComplaint || "Servis berkala sesuai jadwal booking",
+          inspectionFindings: "Pemeriksaan awal antrean booking",
+          items: [
+            {
+              itemType: "service",
+              name: "Servis Berkala & Tune-up",
+              quantity: 1,
+              unitPrice: 75000,
+              isApproved: true,
+            },
+          ],
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Gagal membuat SPK dari booking.");
+
+      setNotification(`SPK #${json.workOrder?.workOrderNumber} berhasil diterbitkan dari booking antrean!`);
+      setTimeout(() => setNotification(null), 4000);
+      fetchData();
+    } catch (err: any) {
+      setError(err.message || "Gagal membuat SPK dari booking.");
+      setTimeout(() => setError(""), 4000);
+    }
+  };
+
   const handleCreateBooking = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -129,6 +167,18 @@ export function BookingsView({
         />
 
         <main className="flex-1 p-6 space-y-6 max-w-7xl w-full mx-auto">
+          {notification && (
+            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 flex items-center justify-between shadow-xs">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>{notification}</span>
+              </div>
+              <button onClick={() => setNotification(null)} className="text-emerald-700 hover:text-emerald-900">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           {/* Top Control Bar */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-xl border border-bengkel-border shadow-2xs">
             <div className="text-xs text-bengkel-muted">
@@ -220,19 +270,27 @@ export function BookingsView({
                               </>
                             )}
                             {b.status === "confirmed" && (
-                              <button
-                                onClick={() => handleUpdateStatus(b.id, "checked_in")}
-                                className="px-2.5 py-1 text-xs font-semibold rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors"
-                              >
-                                Check-in
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleUpdateStatus(b.id, "checked_in")}
+                                  className="px-2.5 py-1 text-xs font-semibold rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors"
+                                >
+                                  Check-in
+                                </button>
+                                <button
+                                  onClick={() => handleConvertToSPK(b)}
+                                  className="px-2.5 py-1 text-xs font-bold rounded-md bg-bengkel-orange text-white hover:bg-bengkel-orange-hover shadow-xs transition-colors"
+                                >
+                                  Proses Jadi SPK
+                                </button>
+                              </>
                             )}
                             {b.status === "checked_in" && (
                               <button
-                                onClick={() => handleUpdateStatus(b.id, "in_service")}
-                                className="px-2.5 py-1 text-xs font-semibold rounded-md bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 transition-colors"
+                                onClick={() => handleConvertToSPK(b)}
+                                className="px-2.5 py-1 text-xs font-bold rounded-md bg-bengkel-orange text-white hover:bg-bengkel-orange-hover shadow-xs transition-colors"
                               >
-                                Masuk Servis
+                                Masuk Servis & Buat SPK
                               </button>
                             )}
                             {b.status === "in_service" && (

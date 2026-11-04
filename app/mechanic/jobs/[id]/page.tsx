@@ -15,6 +15,7 @@ import {
   AlertCircle,
   Package,
   X,
+  Plus,
 } from "lucide-react";
 import { formatIndonesianDate, formatRupiah } from "@/lib/utils";
 
@@ -29,6 +30,17 @@ export default function MechanicJobDetailPage() {
   const [submitting, setSubmitting] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Products from inventory for mechanic to select
+  const [products, setProducts] = useState<any[]>([]);
+  const [itemModalOpen, setItemModalOpen] = useState(false);
+  const [itemForm, setItemForm] = useState({
+    itemType: "part" as "part" | "service",
+    name: "",
+    quantity: 1,
+    unitPrice: 0,
+    referenceId: "",
+  });
 
   const fetchWorkOrder = useCallback(async () => {
     setLoading(true);
@@ -46,9 +58,22 @@ export default function MechanicJobDetailPage() {
     }
   }, [id]);
 
+  const fetchProducts = useCallback(async () => {
+    try {
+      const res = await fetch("/api/inventory");
+      const data = await res.json();
+      setProducts(data.products || []);
+    } catch (err) {
+      console.error(err);
+    }
+  }, []);
+
   useEffect(() => {
-    if (id) fetchWorkOrder();
-  }, [id, fetchWorkOrder]);
+    if (id) {
+      fetchWorkOrder();
+      fetchProducts();
+    }
+  }, [id, fetchWorkOrder, fetchProducts]);
 
   const handleUpdateStatus = async (status: string) => {
     setSubmitting(true);
@@ -61,13 +86,18 @@ export default function MechanicJobDetailPage() {
           id,
           status,
           notes: inspectionText,
+          inspectionFindings: inspectionText,
         }),
       });
 
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Gagal memperbarui status SPK");
 
-      setNotification(`Status SPK berhasil diperbarui menjadi ${status.toUpperCase()}!`);
+      if (status === "completed") {
+        setNotification("Pekerjaan telah selesai! Faktur otomatis diterbitkan ke meja Kasir/Admin.");
+      } else {
+        setNotification(`Status pengerjaan berhasil diperbarui menjadi ${status.toUpperCase()}!`);
+      }
       setTimeout(() => setNotification(null), 4000);
       fetchWorkOrder();
     } catch (err: any) {
@@ -87,8 +117,7 @@ export default function MechanicJobDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id,
-          status: workOrder?.status || "in_progress",
-          notes: inspectionText,
+          inspectionFindings: inspectionText,
         }),
       });
 
@@ -99,6 +128,55 @@ export default function MechanicJobDetailPage() {
       setTimeout(() => setNotification(null), 4000);
     } catch (err: any) {
       setErrorMsg(err.message || "Gagal menyimpan catatan inspeksi");
+      setTimeout(() => setErrorMsg(null), 4000);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleAddItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!itemForm.name) {
+      setErrorMsg("Nama item / suku cadang harus diisi.");
+      return;
+    }
+    setSubmitting(true);
+    setErrorMsg(null);
+
+    try {
+      const res = await fetch("/api/work-orders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id,
+          addItem: {
+            itemType: itemForm.itemType,
+            name: itemForm.name,
+            quantity: itemForm.quantity,
+            unitPrice: itemForm.unitPrice,
+            referenceId: itemForm.referenceId || undefined,
+            isApproved: true,
+          },
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Gagal menambahkan suku cadang / jasa.");
+
+      setNotification(`Berhasil menambahkan "${itemForm.name}" ke lembar kerja SPK!`);
+      setTimeout(() => setNotification(null), 4000);
+
+      setItemModalOpen(false);
+      setItemForm({
+        itemType: "part",
+        name: "",
+        quantity: 1,
+        unitPrice: 0,
+        referenceId: "",
+      });
+      fetchWorkOrder();
+    } catch (err: any) {
+      setErrorMsg(err.message || "Gagal menambahkan item ke SPK.");
       setTimeout(() => setErrorMsg(null), 4000);
     } finally {
       setSubmitting(false);
@@ -220,9 +298,22 @@ export default function MechanicJobDetailPage() {
 
               {/* Line Items List */}
               <div>
-                <h4 className="text-xs font-bold text-bengkel-navy uppercase tracking-wider mb-2">
-                  Daftar Pekerjaan & Suku Cadang Terkait:
-                </h4>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-xs font-bold text-bengkel-navy uppercase tracking-wider">
+                    Daftar Pekerjaan & Suku Cadang Terkait:
+                  </h4>
+                  {workOrder.status !== "completed" && (
+                    <button
+                      type="button"
+                      onClick={() => setItemModalOpen(true)}
+                      className="inline-flex items-center gap-1 text-xs font-bold text-bengkel-orange hover:text-bengkel-orange-hover"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Tambah Suku Cadang / Jasa</span>
+                    </button>
+                  )}
+                </div>
+
                 <div className="divide-y divide-gray-100 border border-bengkel-border rounded-xl overflow-hidden text-xs">
                   {(workOrder.items || []).map((it: any) => (
                     <div key={it.id} className="p-3 bg-white flex items-center justify-between">
@@ -232,11 +323,21 @@ export default function MechanicJobDetailPage() {
                         </span>
                         <span className="font-bold text-bengkel-navy">{it.name}</span>
                       </div>
-                      <div className="text-bengkel-muted">
-                        Jumlah: <span className="font-bold text-bengkel-navy">{it.quantity}</span>
+                      <div className="flex items-center gap-4 text-bengkel-muted">
+                        <div>
+                          Qty: <span className="font-bold text-bengkel-navy">{it.quantity}</span>
+                        </div>
+                        <div className="font-bold text-bengkel-navy">
+                          {formatRupiah(it.totalPrice)}
+                        </div>
                       </div>
                     </div>
                   ))}
+                </div>
+
+                <div className="mt-2 text-right text-xs">
+                  <span className="text-bengkel-muted">Total Estimasi SPK: </span>
+                  <span className="font-bold text-bengkel-navy text-sm">{formatRupiah(workOrder.grandTotal)}</span>
                 </div>
               </div>
 
@@ -262,6 +363,142 @@ export default function MechanicJobDetailPage() {
                     <span>Tandai Servis Selesai & Kirim ke Kasir</span>
                   </button>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Modal Tambah Suku Cadang / Jasa */}
+          {itemModalOpen && (
+            <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-bengkel-border space-y-4">
+                <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                  <h3 className="text-base font-bold text-bengkel-navy">Tambah Part / Jasa Servis</h3>
+                  <button onClick={() => setItemModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleAddItem} className="space-y-3 text-xs">
+                  <div>
+                    <label className="block font-bold text-bengkel-text uppercase tracking-wider mb-1">
+                      Tipe Item *
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setItemForm({ ...itemForm, itemType: "part" })}
+                        className={`py-2 rounded-lg border font-bold text-center ${
+                          itemForm.itemType === "part"
+                            ? "bg-bengkel-orange text-white border-bengkel-orange shadow-xs"
+                            : "bg-white text-gray-600 border-gray-200"
+                        }`}
+                      >
+                        Suku Cadang (Part)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setItemForm({ ...itemForm, itemType: "service" })}
+                        className={`py-2 rounded-lg border font-bold text-center ${
+                          itemForm.itemType === "service"
+                            ? "bg-bengkel-orange text-white border-bengkel-orange shadow-xs"
+                            : "bg-white text-gray-600 border-gray-200"
+                        }`}
+                      >
+                        Jasa Teknisi
+                      </button>
+                    </div>
+                  </div>
+
+                  {itemForm.itemType === "part" && (
+                    <div>
+                      <label className="block font-bold text-bengkel-text uppercase tracking-wider mb-1">
+                        Pilih dari Inventaris Stok
+                      </label>
+                      <select
+                        value={itemForm.referenceId}
+                        onChange={(e) => {
+                          const prod = products.find((p) => p.id === e.target.value);
+                          if (prod) {
+                            setItemForm({
+                              ...itemForm,
+                              referenceId: prod.id,
+                              name: prod.name,
+                              unitPrice: prod.sellingPrice,
+                            });
+                          }
+                        }}
+                        className="w-full px-3 py-2 rounded-lg border border-bengkel-border text-xs focus:outline-none focus:border-bengkel-orange"
+                      >
+                        <option value="">-- Pilih Barang dari Gudang --</option>
+                        {products.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} (Tersedia: {p.stockQuantity}) - {formatRupiah(p.sellingPrice)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block font-bold text-bengkel-text uppercase tracking-wider mb-1">
+                      Nama Part / Tindakan Servis *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder={itemForm.itemType === "part" ? "e.g. Busi Denso Iridium" : "e.g. Kuras Minyak Rem"}
+                      value={itemForm.name}
+                      onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg border border-bengkel-border text-xs"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block font-bold text-bengkel-text uppercase tracking-wider mb-1">
+                        Jumlah (Qty) *
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        min={1}
+                        value={itemForm.quantity}
+                        onChange={(e) => setItemForm({ ...itemForm, quantity: parseInt(e.target.value) || 1 })}
+                        className="w-full px-3 py-2 rounded-lg border border-bengkel-border text-xs text-right font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-bengkel-text uppercase tracking-wider mb-1">
+                        Harga Satuan (Rp) *
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        min={0}
+                        value={itemForm.unitPrice}
+                        onChange={(e) => setItemForm({ ...itemForm, unitPrice: parseInt(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 rounded-lg border border-bengkel-border text-xs text-right font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-end gap-2 border-t border-gray-100">
+                    <button
+                      type="button"
+                      onClick={() => setItemModalOpen(false)}
+                      className="px-3.5 py-2 rounded-lg border border-gray-200 text-bengkel-text hover:bg-gray-50 font-bold"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={submitting}
+                      className="px-4 py-2 rounded-lg bg-bengkel-orange text-white hover:bg-bengkel-orange-hover font-bold shadow-xs"
+                    >
+                      {submitting ? "Menambahkan..." : "Tambahkan ke SPK"}
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           )}

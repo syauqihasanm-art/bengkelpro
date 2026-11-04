@@ -138,14 +138,14 @@ export const db = {
   },
 
   updateCustomer(workshopId: string, id: string, data: Partial<Customer>): Customer {
-    const customer = this.getCustomerById(workshopId, id);
+    const customer = getStore().customers.find((c) => c.id === id && c.workshopId === workshopId);
     if (!customer) throw new Error("Pelanggan tidak ditemukan");
     Object.assign(customer, data, { updatedAt: new Date().toISOString() });
     return customer;
   },
 
   archiveCustomer(workshopId: string, id: string): boolean {
-    const customer = this.getCustomerById(workshopId, id);
+    const customer = getStore().customers.find((c) => c.id === id && c.workshopId === workshopId);
     if (!customer) return false;
     customer.isArchived = true;
     customer.updatedAt = new Date().toISOString();
@@ -196,7 +196,7 @@ export const db = {
   },
 
   updateVehicle(workshopId: string, id: string, data: Partial<Vehicle>): Vehicle {
-    const vehicle = this.getVehicleById(workshopId, id);
+    const vehicle = getStore().vehicles.find((v) => v.id === id && v.workshopId === workshopId);
     if (!vehicle) throw new Error("Kendaraan tidak ditemukan.");
 
     // Validate odometer monotonically increases unless authorized
@@ -269,7 +269,7 @@ export const db = {
   },
 
   updateBookingStatus(workshopId: string, id: string, status: Booking["status"], notes?: string): Booking {
-    const booking = this.getBookingById(workshopId, id);
+    const booking = getStore().bookings.find((b) => b.id === id && b.workshopId === workshopId);
     if (!booking) throw new Error("Booking tidak ditemukan.");
     booking.status = status;
     if (notes) booking.adminNotes = notes;
@@ -397,7 +397,7 @@ export const db = {
    */
   deductWorkOrderParts(workshopId: string, workOrderId: string): void {
     const store = getStore();
-    const wo = this.getWorkOrderById(workshopId, workOrderId);
+    const wo = store.workOrders.find((w) => w.id === workOrderId && w.workshopId === workshopId);
     if (!wo) throw new Error("Work order tidak ditemukan.");
 
     const partItems = (wo.items || []).filter((it) => it.itemType === "part" && it.isApproved && !it.isPartsDeducted);
@@ -440,7 +440,7 @@ export const db = {
 
   updateWorkOrderStatus(workshopId: string, id: string, status: WorkOrder["status"], notes?: string): WorkOrder {
     const store = getStore();
-    const wo = this.getWorkOrderById(workshopId, id);
+    const wo = store.workOrders.find((w) => w.id === id && w.workshopId === workshopId);
     if (!wo) throw new Error("Work order tidak ditemukan.");
 
     // If transitioning to in_progress or completed, ensure parts deduction is processed safely
@@ -455,6 +455,77 @@ export const db = {
     // If completed, automatically generate invoice and service history
     if (status === "completed") {
       this.generateInvoiceFromWorkOrder(workshopId, id);
+    }
+
+    return wo;
+  },
+
+  addWorkOrderItem(
+    workshopId: string,
+    workOrderId: string,
+    item: {
+      itemType: "service" | "part";
+      name: string;
+      quantity: number;
+      unitPrice: number;
+      referenceId?: string;
+      isApproved?: boolean;
+    }
+  ): WorkOrder {
+    const store = getStore();
+    const wo = store.workOrders.find((w) => w.id === workOrderId && w.workshopId === workshopId);
+    if (!wo) throw new Error("Work order tidak ditemukan.");
+
+    const newItem: WorkOrderItem = {
+      id: crypto.randomUUID(),
+      workOrderId: wo.id,
+      itemType: item.itemType,
+      referenceId: item.referenceId,
+      name: item.name,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      totalPrice: item.quantity * item.unitPrice,
+      isApproved: item.isApproved ?? true,
+      isPartsDeducted: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    if (!wo.items) wo.items = [];
+    wo.items.push(newItem);
+
+    // Recalculate totals
+    wo.totalLabor = wo.items
+      .filter((it) => it.itemType === "service" && it.isApproved)
+      .reduce((sum, it) => sum + it.totalPrice, 0);
+    wo.totalParts = wo.items
+      .filter((it) => it.itemType === "part" && it.isApproved)
+      .reduce((sum, it) => sum + it.totalPrice, 0);
+    wo.subtotal = wo.totalLabor + wo.totalParts;
+    wo.grandTotal = Math.max(0, wo.subtotal - wo.discount + wo.tax);
+    wo.updatedAt = new Date().toISOString();
+
+    // If work order is already in_progress or completed and it's an approved part, deduct stock
+    if ((wo.status === "in_progress" || wo.status === "completed") && newItem.isApproved) {
+      this.deductWorkOrderParts(workshopId, wo.id);
+    }
+
+    // Also sync with invoice if one was already generated
+    const inv = store.invoices.find((i) => i.workOrderId === wo.id);
+    if (inv) {
+      if (!inv.items) inv.items = [];
+      inv.items.push({
+        id: crypto.randomUUID(),
+        invoiceId: inv.id,
+        itemType: newItem.itemType,
+        name: newItem.name,
+        quantity: newItem.quantity,
+        unitPrice: newItem.unitPrice,
+        totalPrice: newItem.totalPrice,
+        createdAt: new Date().toISOString(),
+      });
+      inv.subtotal = wo.subtotal;
+      inv.totalAmount = wo.grandTotal;
+      inv.updatedAt = new Date().toISOString();
     }
 
     return wo;
@@ -755,6 +826,99 @@ export const db = {
       createdAt: new Date().toISOString(),
     });
 
+    return newInvoice;
+  },
+
+  createDirectInvoice(workshopId: string, data: {
+    customerId: string;
+    customerName?: string;
+    workOrderId?: string;
+    items: {
+      itemType: "service" | "part";
+      name: string;
+      quantity: number;
+      unitPrice: number;
+      referenceId?: string;
+    }[];
+    discount?: number;
+    tax?: number;
+    notes?: string;
+  }): Invoice {
+    const store = getStore();
+    const customer = store.customers.find((c) => c.id === data.customerId && c.workshopId === workshopId);
+    const invoiceId = crypto.randomUUID();
+    const invoiceNumber = `INV-${new Date().toISOString().slice(2, 4)}${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(store.invoices.length + 1).padStart(4, "0")}`;
+
+    const invoiceItems = data.items.map((it) => {
+      // If item is part and has referenceId, deduct stock and write movement
+      if (it.itemType === "part" && it.referenceId) {
+        const product = store.products.find((p) => p.id === it.referenceId && p.workshopId === workshopId);
+        if (product) {
+          if (product.stockQuantity < it.quantity) {
+            throw new Error(`Stok "${product.name}" tidak mencukupi (Tersedia: ${product.stockQuantity}).`);
+          }
+          const prevStock = product.stockQuantity;
+          product.stockQuantity -= it.quantity;
+          product.updatedAt = new Date().toISOString();
+
+          store.stockMovements.push({
+            id: crypto.randomUUID(),
+            workshopId,
+            productId: product.id,
+            productName: product.name,
+            referenceType: "invoice",
+            referenceId: invoiceId,
+            movementType: "out",
+            quantity: it.quantity,
+            previousStock: prevStock,
+            currentStock: product.stockQuantity,
+            unitCost: product.purchasePrice,
+            notes: `Penjualan langsung via Faktur #${invoiceNumber}`,
+            createdAt: new Date().toISOString(),
+          });
+        }
+      }
+
+      return {
+        id: crypto.randomUUID(),
+        invoiceId,
+        itemType: it.itemType,
+        name: it.name,
+        quantity: it.quantity,
+        unitPrice: it.unitPrice,
+        totalPrice: it.quantity * it.unitPrice,
+        createdAt: new Date().toISOString(),
+      };
+    });
+
+    const subtotal = invoiceItems.reduce((sum, it) => sum + it.totalPrice, 0);
+    const discount = Math.max(0, data.discount || 0);
+    const tax = Math.max(0, data.tax || 0);
+    const totalAmount = Math.max(0, subtotal - discount + tax);
+
+    const newInvoice: Invoice = {
+      id: invoiceId,
+      workshopId,
+      invoiceNumber,
+      workOrderId: data.workOrderId,
+      customerId: data.customerId,
+      customerName: data.customerName || (customer ? customer.fullName : "Pelanggan"),
+      invoiceDate: new Date().toISOString().split("T")[0],
+      dueDate: new Date().toISOString().split("T")[0],
+      subtotal,
+      discount,
+      taxRate: 0,
+      taxAmount: tax,
+      totalAmount,
+      paidAmount: 0,
+      status: "unpaid",
+      notes: data.notes || `Faktur kasir langsung #${invoiceNumber}`,
+      items: invoiceItems,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    store.invoices.push(newInvoice);
     return newInvoice;
   },
 

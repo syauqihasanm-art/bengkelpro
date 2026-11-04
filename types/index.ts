@@ -206,7 +206,7 @@ export interface StockMovement {
   workshopId: string;
   productId: string;
   productName?: string;
-  referenceType: "purchase" | "work_order" | "adjustment";
+  referenceType: "purchase" | "work_order" | "adjustment" | "invoice";
   referenceId?: string;
   movementType: "in" | "out" | "adjustment";
   quantity: number;
