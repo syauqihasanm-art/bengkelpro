@@ -41,6 +41,7 @@ export function WorkOrdersView({
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [notification, setNotification] = useState<string | null>(null);
   const [selectedWO, setSelectedWO] = useState<any | null>(null);
 
   // Form states for creating new work order
@@ -102,7 +103,12 @@ export function WorkOrdersView({
     fetchData();
   }, [fetchData]);
 
-  const handleUpdateWOStatus = async (id: string, status: string, customerApproval?: string) => {
+  const handleUpdateWOStatus = async (
+    id: string,
+    status: string,
+    customerApproval?: string,
+    autoSettle = false
+  ) => {
     try {
       const res = await fetch("/api/work-orders", {
         method: "PATCH",
@@ -111,6 +117,7 @@ export function WorkOrdersView({
           id,
           status,
           customerApprovalStatus: customerApproval,
+          autoSettle,
         }),
       });
 
@@ -120,13 +127,107 @@ export function WorkOrdersView({
         return;
       }
 
+      if (status === "completed") {
+        setNotification(
+          `SPK #${json.workOrder?.workOrderNumber || "SPK"} berhasil diselesaikan! Faktur lunas otomatis dan pembayaran Rp ${(json.workOrder?.grandTotal || 0).toLocaleString()} telah masuk ke pendapatan kas bengkel.`
+        );
+        setTimeout(() => setNotification(null), 6000);
+      }
+
       fetchData();
       if (selectedWO?.id === id) {
         setSelectedWO(json.workOrder);
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      alert(err.message || "Terjadi kesalahan memperbarui SPK");
     }
+  };
+
+  const handlePrintInvoiceForWO = (wo: any) => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Faktur Lunas - ${wo.workOrderNumber}</title>
+          <style>
+            body { font-family: sans-serif; padding: 24px; color: #101d35; }
+            .header { display: flex; justify-content: space-between; border-bottom: 2px solid #101d35; padding-bottom: 12px; }
+            .title { font-size: 20px; font-weight: bold; color: #101d35; }
+            table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13px; }
+            th, td { padding: 8px 10px; border-bottom: 1px solid #ddd; text-align: left; }
+            th { background: #f5f7fa; font-weight: bold; }
+            .text-right { text-align: right; }
+            .totals { margin-top: 20px; float: right; width: 300px; font-size: 13px; }
+            .totals div { display: flex; justify-content: space-between; padding: 4px 0; }
+            .grand-total { font-weight: bold; font-size: 15px; border-top: 2px solid #101d35; padding-top: 6px; }
+            .paid-stamp { display: inline-block; margin-top: 15px; padding: 6px 14px; border: 2px solid #16a34a; color: #16a34a; font-weight: bold; font-size: 14px; border-radius: 6px; text-transform: uppercase; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <div class="title">BENGKEL SAHABAT MOTOR</div>
+              <div style="font-size: 12px; color: #555;">Jl. Fatmawati Raya No. 45, Jakarta Selatan | Telp: 0812-3456-7890</div>
+              <div style="font-size: 13px; font-weight: bold; margin-top: 6px;">BUKTI PEMBAYARAN & FAKTUR LUNAS RESMI</div>
+            </div>
+            <div style="text-align: right; font-size: 12px;">
+              <div>No. SPK: <b>${wo.workOrderNumber}</b></div>
+              <div>Tanggal Selesai: ${formatIndonesianDate(new Date())}</div>
+              <div>Metode: <b>Kasir Tunai / Lunas</b></div>
+            </div>
+          </div>
+
+          <div style="margin-top: 16px; font-size: 13px;">
+            <div><strong>Pelanggan:</strong> ${wo.customer?.fullName || "Pelanggan"} (${wo.customer?.phone || "-"})</div>
+            <div><strong>Kendaraan:</strong> ${wo.vehicle?.brand || ""} ${wo.vehicle?.model || ""} (${wo.vehicle?.licensePlate || "-"}) - Odometer: ${(wo.odometerIn || 0).toLocaleString()} km</div>
+            <div><strong>Keluhan Servis:</strong> ${wo.customerComplaint || "-"}</div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Deskripsi Jasa / Suku Cadang</th>
+                <th class="text-right">Qty</th>
+                <th class="text-right">Harga Satuan</th>
+                <th class="text-right">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${(wo.items || []).map((it: any) => `
+                <tr>
+                  <td>
+                    <span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: ${it.itemType === 'service' ? '#dbeafe; color: #1d4ed8' : '#ffedd5; color: #c2410c'}; font-weight: bold; margin-right: 6px;">
+                      ${it.itemType === 'service' ? 'JASA' : 'PART'}
+                    </span>
+                    ${it.name}
+                  </td>
+                  <td class="text-right">${it.quantity}</td>
+                  <td class="text-right">${formatRupiah(it.unitPrice)}</td>
+                  <td class="text-right">${formatRupiah(it.totalPrice || it.unitPrice * it.quantity)}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+
+          <div class="totals">
+            <div><span>Total Jasa Servis:</span><span>${formatRupiah(wo.totalLabor)}</span></div>
+            <div><span>Total Suku Cadang:</span><span>${formatRupiah(wo.totalParts)}</span></div>
+            ${wo.discount ? `<div><span>Diskon:</span><span>-${formatRupiah(wo.discount)}</span></div>` : ""}
+            <div class="grand-total"><span>Total Pembayaran:</span><span>${formatRupiah(wo.grandTotal)}</span></div>
+            <div><span class="paid-stamp">LUNAS - DITERIMA KASIR</span></div>
+          </div>
+          <div style="clear: both;"></div>
+
+          <div style="margin-top: 40px; border-top: 1px dashed #ccc; padding-top: 10px; font-size: 11px; color: #666; text-align: center;">
+            Terima kasih atas kunjungan Anda di Bengkel Sahabat Motor. Simpan faktur ini sebagai bukti garansi servis resmi (7 hari kerja).
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
   };
 
   const handlePrintSPK = (wo: any) => {
@@ -290,6 +391,18 @@ export function WorkOrdersView({
         />
 
         <main className="flex-1 p-6 space-y-6 max-w-7xl w-full mx-auto">
+          {notification && (
+            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 flex items-center justify-between shadow-xs">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                <span>{notification}</span>
+              </div>
+              <button onClick={() => setNotification(null)} className="text-emerald-700 hover:text-emerald-900">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           {/* Top Control Bar */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-xl border border-bengkel-border shadow-2xs">
             <div className="text-xs text-bengkel-muted">
@@ -388,43 +501,57 @@ export function WorkOrdersView({
                               <Eye className="w-3.5 h-3.5 text-bengkel-orange" />
                               <span>Detail</span>
                             </button>
-                            {wo.customerApprovalStatus === "pending" && (
-                              <button
-                                onClick={() => handleUpdateWOStatus(wo.id, wo.status, "approved")}
-                                className="px-2 py-1 text-xs font-semibold rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200"
-                              >
-                                ACC Pelanggan
-                              </button>
-                            )}
-                            {wo.status === "waiting" && (
-                              <button
-                                onClick={() => handleUpdateWOStatus(wo.id, "inspection")}
-                                className="px-2 py-1 text-xs font-semibold rounded-md bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200"
-                              >
-                                Mulai Inspeksi
-                              </button>
-                            )}
-                            {wo.status === "inspection" && (
-                              <button
-                                onClick={() => handleUpdateWOStatus(wo.id, "in_progress", "approved")}
-                                className="px-2 py-1 text-xs font-semibold rounded-md bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-200"
-                              >
-                                Kerjakan & Potong Stok
-                              </button>
-                            )}
-                            {wo.status === "in_progress" && (
-                              <button
-                                onClick={() => handleUpdateWOStatus(wo.id, "completed")}
-                                className="px-2.5 py-1 text-xs font-bold rounded-md bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs"
-                              >
-                                Selesai & Buat Faktur
-                              </button>
+                            {wo.status !== "completed" && (
+                              <>
+                                {wo.customerApprovalStatus === "pending" && (
+                                  <button
+                                    onClick={() => handleUpdateWOStatus(wo.id, wo.status, "approved")}
+                                    className="px-2 py-1 text-xs font-semibold rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200"
+                                  >
+                                    ACC Pelanggan
+                                  </button>
+                                )}
+                                {wo.status === "waiting" && (
+                                  <button
+                                    onClick={() => handleUpdateWOStatus(wo.id, "inspection")}
+                                    className="px-2 py-1 text-xs font-semibold rounded-md bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200"
+                                  >
+                                    Mulai Inspeksi
+                                  </button>
+                                )}
+                                {wo.status === "inspection" && (
+                                  <button
+                                    onClick={() => handleUpdateWOStatus(wo.id, "in_progress", "approved")}
+                                    className="px-2 py-1 text-xs font-semibold rounded-md bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-200"
+                                  >
+                                    Kerjakan
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleUpdateWOStatus(wo.id, "completed", "approved", true)}
+                                  className="px-2.5 py-1 text-xs font-bold rounded-md bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs flex items-center gap-1 transition-colors"
+                                  title="Selesaikan servis dan bayar lunas otomatis ke pendapatan kas"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>Selesai & Bayar Lunas</span>
+                                </button>
+                              </>
                             )}
                             {wo.status === "completed" && (
-                              <span className="text-[11px] text-emerald-700 font-bold flex items-center gap-1">
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                <span>Faktur Dibuat</span>
-                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                  <span>Lunas & Selesai</span>
+                                </span>
+                                <button
+                                  onClick={() => handlePrintInvoiceForWO(wo)}
+                                  className="px-2 py-1 text-xs font-semibold rounded-md border border-gray-200 text-bengkel-navy hover:bg-gray-100 flex items-center gap-1 transition-colors"
+                                  title="Cetak Bukti Pembayaran / Faktur"
+                                >
+                                  <Printer className="w-3.5 h-3.5 text-bengkel-orange" />
+                                  <span>Faktur</span>
+                                </button>
+                              </div>
                             )}
                           </div>
                         </td>
@@ -756,38 +883,57 @@ export function WorkOrdersView({
                     <span>Cetak Lembar SPK</span>
                   </button>
 
-                  <div className="flex items-center gap-2">
-                    {selectedWO.customerApprovalStatus === "pending" && (
-                      <button
-                        onClick={() => handleUpdateWOStatus(selectedWO.id, selectedWO.status, "approved")}
-                        className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors"
-                      >
-                        ACC Estimasi Biaya
-                      </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {selectedWO.status !== "completed" && (
+                      <>
+                        {selectedWO.customerApprovalStatus === "pending" && (
+                          <button
+                            onClick={() => handleUpdateWOStatus(selectedWO.id, selectedWO.status, "approved")}
+                            className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors"
+                          >
+                            ACC Estimasi Biaya
+                          </button>
+                        )}
+                        {selectedWO.status === "waiting" && (
+                          <button
+                            onClick={() => handleUpdateWOStatus(selectedWO.id, "inspection")}
+                            className="px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-xs transition-colors"
+                          >
+                            Mulai Inspeksi
+                          </button>
+                        )}
+                        {selectedWO.status === "inspection" && (
+                          <button
+                            onClick={() => handleUpdateWOStatus(selectedWO.id, "in_progress", "approved")}
+                            className="px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow-xs transition-colors"
+                          >
+                            Kerjakan
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleUpdateWOStatus(selectedWO.id, "completed", "approved", true)}
+                          className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5"
+                          title="Selesaikan servis dan bayar lunas langsung ke pendapatan kas"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Selesai &amp; Bayar Lunas</span>
+                        </button>
+                      </>
                     )}
-                    {selectedWO.status === "waiting" && (
-                      <button
-                        onClick={() => handleUpdateWOStatus(selectedWO.id, "inspection")}
-                        className="px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-xs transition-colors"
-                      >
-                        Mulai Inspeksi
-                      </button>
-                    )}
-                    {selectedWO.status === "inspection" && (
-                      <button
-                        onClick={() => handleUpdateWOStatus(selectedWO.id, "in_progress", "approved")}
-                        className="px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow-xs transition-colors"
-                      >
-                        Kerjakan &amp; Potong Stok
-                      </button>
-                    )}
-                    {selectedWO.status === "in_progress" && (
-                      <button
-                        onClick={() => handleUpdateWOStatus(selectedWO.id, "completed")}
-                        className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors"
-                      >
-                        Selesaikan Servis
-                      </button>
+                    {selectedWO.status === "completed" && (
+                      <div className="flex items-center gap-2">
+                        <span className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          <span>Lunas &amp; Selesai</span>
+                        </span>
+                        <button
+                          onClick={() => handlePrintInvoiceForWO(selectedWO)}
+                          className="px-3 py-2 rounded-xl bg-bengkel-orange hover:bg-bengkel-orange-hover text-white text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5"
+                        >
+                          <Printer className="w-4 h-4" />
+                          <span>Cetak Faktur Lunas</span>
+                        </button>
+                      </div>
                     )}
                     <button
                       onClick={() => setSelectedWO(null)}

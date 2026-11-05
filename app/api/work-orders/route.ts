@@ -68,6 +68,7 @@ export async function PATCH(req: Request) {
       customerApprovalStatus,
       inspectionFindings,
       addItem,
+      autoSettle,
     } = body;
 
     if (!id) {
@@ -96,11 +97,14 @@ export async function PATCH(req: Request) {
     }
 
     if (status) {
-      db.updateWorkOrderStatus(workshopId, id, status, notes);
+      db.updateWorkOrderStatus(workshopId, id, status, notes, Boolean(autoSettle));
     }
 
     const updated = db.getWorkOrderById(workshopId, id);
-    return NextResponse.json({ workOrder: updated || wo });
+    const invoices = db.getInvoices(workshopId);
+    const invoice = invoices.find((inv) => inv.workOrderId === id);
+
+    return NextResponse.json({ workOrder: updated || wo, invoice });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Gagal memperbarui SPK" }, { status: 400 });
   }

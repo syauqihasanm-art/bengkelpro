@@ -445,10 +445,16 @@ export const db = {
     }
   },
 
-  updateWorkOrderStatus(workshopId: string, id: string, status: WorkOrder["status"], notes?: string): WorkOrder {
+  updateWorkOrderStatus(workshopId: string, id: string, status: WorkOrder["status"], notes?: string, autoSettle = false): WorkOrder {
     const store = getStore();
     const wo = store.workOrders.find((w) => w.id === id && w.workshopId === workshopId);
     if (!wo) throw new Error("Work order tidak ditemukan.");
+
+    // If transitioning to completed, ensure customer approval status is approved so parts are deducted
+    if (status === "completed") {
+      wo.customerApprovalStatus = "approved";
+      if (!wo.approvedAt) wo.approvedAt = new Date().toISOString();
+    }
 
     // If transitioning to in_progress or completed, ensure parts deduction is processed safely
     if ((status === "in_progress" || status === "completed") && wo.customerApprovalStatus === "approved") {
@@ -461,7 +467,17 @@ export const db = {
 
     // If completed, automatically generate invoice and service history
     if (status === "completed") {
-      this.generateInvoiceFromWorkOrder(workshopId, id);
+      const invoice = this.generateInvoiceFromWorkOrder(workshopId, id);
+
+      if (autoSettle && invoice.status !== "paid") {
+        this.recordPayment(workshopId, {
+          invoiceId: invoice.id,
+          amount: invoice.totalAmount - invoice.paidAmount,
+          paymentMethod: "cash",
+          notes: `Pembayaran lunas kasir saat penyelesaian SPK #${wo.workOrderNumber}`,
+          idempotencyKey: `AUTO-PAY-${invoice.id}`,
+        });
+      }
     }
 
     return wo;
