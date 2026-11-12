@@ -160,4 +160,115 @@ test.describe("Operational Workflows & Financial Reconciliation", () => {
     await expect(page.locator("text=WO-2611-0001")).toBeVisible();
     await expect(page.locator("text=Agus Prasetyo")).toBeVisible();
   });
+
+  test("Role-Login Flow (Pengujian A-D): Mechanic Jobs Detail + Sparepart Usage -> Admin Cash Payment -> Owner & Customer Sync", async ({
+    page,
+    request,
+  }) => {
+    const invBeforeRes = await request.get("/api/inventory");
+    const { products } = await invBeforeRes.json();
+    const part = products[0];
+    const stockBefore = part.stockQuantity;
+
+    const repBeforeRes = await request.get("/api/reports");
+    const { summary: financeBefore } = await repBeforeRes.json();
+
+    // Admin creates a fresh SPK assigned to Agus Prasetyo
+    const createWoRes = await request.post("/api/work-orders", {
+      data: {
+        customerId: "55555555-5555-4555-8555-555555555555",
+        vehicleId: "66666666-6666-4666-8666-666666666666",
+        odometerIn: 16200,
+        customerComplaint: "Servis mesin & pasang sparepart baru",
+        assignedMechanicIds: ["44444444-4444-4444-8444-444444444444"],
+        items: [
+          {
+            itemType: "service",
+            name: "Jasa Tune-Up Mesin",
+            quantity: 1,
+            unitPrice: 65000,
+            isApproved: true,
+          },
+        ],
+      },
+    });
+    expect(createWoRes.status()).toBe(201);
+    const { workOrder: createdWO } = await createWoRes.json();
+    const woNumber = createdWO.workOrderNumber;
+
+    // Pengujian A: Login sebagai Mekanik -> Daftar Pekerjaan -> Detail SPK -> Tambah Part -> Selesai
+    await page.goto("/login");
+    await page.getByRole("button", { name: "Mekanik" }).click();
+    await page.waitForURL("**/mechanic/dashboard");
+
+    await page.goto("/mechanic/jobs");
+    await expect(page.locator(`text=${woNumber}`)).toBeVisible();
+    await page.locator(`a[href="/mechanic/jobs/${createdWO.id}"]`).click();
+    await page.waitForURL(`**/mechanic/jobs/${createdWO.id}`);
+
+    // Add sparepart from inventory
+    await page.getByRole("button", { name: "Tambah Suku Cadang / Jasa" }).click();
+    await page.locator("select").first().selectOption(part.id);
+    await page.getByRole("button", { name: "Tambahkan ke SPK" }).click();
+    await expect(page.locator(`text=${part.name}`).first()).toBeVisible();
+
+    // Fill repair result & click Selesai & Kirim ke Kasir
+    await page
+      .getByPlaceholder("Tuliskan tindakan perbaikan yang sudah selesai dikerjakan mekanik...")
+      .fill("Tune-up selesai dan part pengganti terpasang baik.");
+    await page.getByTestId("detail-complete-wo").click();
+
+    await expect(page.locator("text=Status: Selesai Dikerjakan")).toBeVisible();
+    const invMidRes = await request.get("/api/inventory");
+    const partAfterComplete = (await invMidRes.json()).products.find((p: any) => p.id === part.id);
+    expect(partAfterComplete.stockQuantity).toBe(stockBefore - 1);
+
+    // Pengujian B: Login sebagai Admin / Kasir -> Invoice & Konfirmasi Pembayaran Tunai
+    await page.goto("/login");
+    await page.getByRole("button", { name: "Admin / Kasir" }).click();
+    await page.waitForURL("**/admin/dashboard");
+    await expect(page.getByTestId(`cashier-queue-${woNumber}`)).toBeVisible();
+
+    await page.goto("/admin/invoices");
+    await expect(page.getByTestId(`unbilled-work-done-${woNumber}`)).toBeVisible();
+    await page.getByTestId(`create-invoice-${woNumber}`).click();
+    await expect(page.locator("text=Catat Pembayaran Kasir")).toBeVisible();
+    await page.getByRole("button", { name: "Konfirmasi Pembayaran" }).click();
+    await expect(page.locator("text=Lunas! Dashboard Owner & riwayat pelanggan otomatis diperbarui.")).toBeVisible();
+
+    // Inventory MUST NOT be deducted a second time by billing/payment
+    const invAfterPayRes = await request.get("/api/inventory");
+    const partAfterPay = (await invAfterPayRes.json()).products.find((p: any) => p.id === part.id);
+    expect(partAfterPay.stockQuantity).toBe(stockBefore - 1);
+
+    // Pengujian C: Login sebagai Pemilik Bengkel -> Dashboard & Laporan Keuangan
+    await page.goto("/login");
+    await page.getByRole("button", { name: "Pemilik Bengkel" }).click();
+    await page.waitForURL("**/owner/dashboard");
+    await expect(page.locator(`text=${woNumber}`).first()).toBeVisible();
+
+    const repAfterRes = await request.get("/api/reports");
+    const { summary: financeAfter } = await repAfterRes.json();
+    const expectedTotal = 65000 + part.sellingPrice;
+    expect(financeAfter.totalRevenue).toBe(financeBefore.totalRevenue + expectedTotal);
+    expect(financeAfter.totalTransactions).toBe(financeBefore.totalTransactions + 1);
+
+    // Pengujian D: Login sebagai Pelanggan -> Riwayat Servis & Tagihan Faktur
+    await page.goto("/login");
+    await page.getByRole("button", { name: "Pelanggan" }).click();
+    await page.waitForURL("**/customer/dashboard");
+
+    const invListRes = await request.get("/api/invoices");
+    const createdInvoice = (await invListRes.json()).invoices.find(
+      (i: any) => i.workOrderId === createdWO.id
+    );
+    expect(createdInvoice).toBeDefined();
+
+    await page.goto("/customer/service-history");
+    await expect(page.locator(`text=${woNumber}`)).toBeVisible();
+    await page.goto("/customer/invoices");
+    const invRow = page.locator("tr", { hasText: createdInvoice.invoiceNumber });
+    await expect(invRow).toBeVisible();
+    await expect(invRow).toContainText("Lunas");
+  });
 });
