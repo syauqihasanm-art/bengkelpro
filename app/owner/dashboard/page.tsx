@@ -31,9 +31,9 @@ export default function OwnerDashboardPage() {
     setLoading(true);
     try {
       const [repRes, woRes, bkgRes] = await Promise.all([
-        fetch("/api/reports"),
-        fetch("/api/work-orders"),
-        fetch("/api/bookings"),
+        fetch("/api/reports", { cache: "no-store" }),
+        fetch("/api/work-orders", { cache: "no-store" }),
+        fetch("/api/bookings", { cache: "no-store" }),
       ]);
 
       const repData = await repRes.json();
@@ -108,7 +108,7 @@ export default function OwnerDashboardPage() {
             <StatsCard
               title="Pendapatan Kas (Lunas)"
               value={formatRupiah(summary?.totalRevenue || 0)}
-              description="Dari transaksi kasir yang terkonfirmasi"
+              description={`Dari ${summary?.totalTransactions || 0} transaksi kasir terkonfirmasi`}
               icon={<DollarSign className="w-5 h-5" />}
               variant="green"
             />
@@ -195,7 +195,7 @@ export default function OwnerDashboardPage() {
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-xs font-bold text-bengkel-navy">{wo.workOrderNumber}</span>
-                          <Badge status={wo.status} size="sm" />
+                          <Badge status={wo.invoiceStatus === "paid" || wo.paidAt ? "paid" : wo.status} size="sm" />
                         </div>
                         <div className="text-xs text-bengkel-text font-medium">
                           {wo.customer?.fullName || "Pelanggan"} —{" "}
@@ -269,6 +269,57 @@ export default function OwnerDashboardPage() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Confirmed Cashier Transaction History */}
+          <div className="bg-white rounded-xl border border-bengkel-border shadow-2xs p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-bengkel-navy">Riwayat Pembayaran Masuk Terkonfirmasi</h3>
+                <p className="text-xs text-bengkel-muted">
+                  Pembayaran kasir yang telah berstatus Lunas dan otomatis masuk ke laporan keuangan
+                </p>
+              </div>
+              <Link href="/owner/reports" className="text-xs font-bold text-bengkel-orange hover:underline flex items-center gap-1">
+                <span>Laporan Keuangan</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+
+            {!summary?.recentTransactions?.length ? (
+              <div className="text-center py-6 text-xs text-bengkel-muted">Belum ada transaksi pembayaran tercatat.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-gray-50 border-b border-bengkel-border text-bengkel-muted uppercase font-bold">
+                    <tr>
+                      <th className="py-2.5 px-3">No. Pembayaran</th>
+                      <th className="py-2.5 px-3">Faktur / SPK</th>
+                      <th className="py-2.5 px-3">Pelanggan</th>
+                      <th className="py-2.5 px-3">Metode</th>
+                      <th className="py-2.5 px-3 text-right">Nominal</th>
+                      <th className="py-2.5 px-3 text-right">Tanggal</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {summary.recentTransactions.slice(0, 6).map((tx: any) => (
+                      <tr key={tx.id}>
+                        <td className="py-2.5 px-3 font-mono font-bold text-bengkel-navy">{tx.paymentNumber}</td>
+                        <td className="py-2.5 px-3 font-mono text-bengkel-muted">
+                          {tx.invoiceNumber} {tx.workOrderNumber !== "-" ? `(${tx.workOrderNumber})` : ""}
+                        </td>
+                        <td className="py-2.5 px-3 font-semibold text-bengkel-navy">{tx.customerName}</td>
+                        <td className="py-2.5 px-3 uppercase font-semibold text-[11px] text-emerald-700">
+                          {tx.paymentMethod === "cash" ? "Tunai" : tx.paymentMethod === "bank_transfer" ? "Transfer" : tx.paymentMethod.toUpperCase()}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-bold text-emerald-700">{formatRupiah(tx.amount)}</td>
+                        <td className="py-2.5 px-3 text-right text-bengkel-muted">{formatIndonesianDate(tx.paymentDate, true)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </main>
       </div>

@@ -481,6 +481,21 @@ export const initialStore: BengkelStore = {
       customerApprovalStatus: "approved",
       approvedAt: "2026-11-01T09:20:00Z",
       finalNotes: "Pengerjaan sedang berlangsung oleh Mekanik Agus.",
+      assignedMechanics: [
+        {
+          id: defaultMechanicId,
+          workshopId: defaultWorkshopId,
+          userId: defaultMechanicId,
+          name: "Agus Prasetyo",
+          phone: "081234567892",
+          specialization: "Spesialis Mesin & Injeksi Honda/Yamaha",
+          status: "active",
+          rating: 4.9,
+          activeJobsCount: 1,
+          completedJobsCount: 42,
+          createdAt: "2026-10-01T00:00:00Z",
+        },
+      ],
       items: [
         {
           id: "woi1111-1111-4111-8111-111111111111",

@@ -15,6 +15,10 @@ export function Badge({ status, className = "", size = "md" }: BadgeProps) {
 
   switch (normalized) {
     // Work Orders & Bookings
+    case "waiting":
+      colorClasses = "bg-amber-50 text-amber-700 border-amber-200";
+      label = "Menunggu Pengerjaan";
+      break;
     case "pending":
       colorClasses = "bg-amber-50 text-amber-700 border-amber-200";
       label = "Menunggu";
@@ -43,6 +47,14 @@ export function Badge({ status, className = "", size = "md" }: BadgeProps) {
     case "waiting_parts":
       colorClasses = "bg-yellow-50 text-yellow-700 border-yellow-200";
       label = "Menunggu Part";
+      break;
+    case "work_done":
+      colorClasses = "bg-teal-50 text-teal-700 border-teal-200";
+      label = "Selesai Dikerjakan";
+      break;
+    case "awaiting_payment":
+      colorClasses = "bg-orange-50 text-orange-700 border-orange-200";
+      label = "Menunggu Pembayaran";
       break;
     case "completed":
     case "delivered":

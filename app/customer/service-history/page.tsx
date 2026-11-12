@@ -11,7 +11,7 @@ export default function CustomerServiceHistoryPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/service-history")
+    fetch("/api/service-history", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
         if (data.histories) {
@@ -56,6 +56,8 @@ export default function CustomerServiceHistoryPage() {
                       <h3 className="text-base font-black text-bengkel-navy">{h.vehicleName}</h3>
                       <div className="text-xs text-bengkel-muted mt-0.5">
                         Tanggal Servis: {formatIndonesianDate(h.serviceDate)}
+                        {h.workOrderNumber ? ` • ${h.workOrderNumber}` : ""}
+                        {h.mechanicName ? ` • Mekanik: ${h.mechanicName}` : ""}
                       </div>
                     </div>
                     <div className="text-right">

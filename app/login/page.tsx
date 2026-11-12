@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Logo } from "@/components/Logo";
 import { Lock, Mail, ArrowRight, ShieldCheck, UserCheck, Wrench, Shield, Car } from "lucide-react";
+import { DEMO_SESSIONS, setActiveSession } from "@/lib/session";
+import { UserRole } from "@/types";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -25,31 +27,45 @@ export default function LoginPage() {
       return;
     }
 
-    // Role-based routing simulation
+    // Role-based routing & session binding
+    let targetRole: UserRole = "customer";
+    let targetRoute = "/customer/dashboard";
+    if (email.includes("owner")) {
+      targetRole = "workshop_owner";
+      targetRoute = "/owner/dashboard";
+    } else if (email.includes("admin@sahabat") || email.includes("kasir")) {
+      targetRole = "workshop_admin";
+      targetRoute = "/admin/dashboard";
+    } else if (email.includes("mekanik") || email.includes("mechanic")) {
+      targetRole = "mechanic";
+      targetRoute = "/mechanic/dashboard";
+    } else if (email.includes("superadmin")) {
+      targetRole = "super_admin";
+      targetRoute = "/super-admin/dashboard";
+    }
+
+    setActiveSession(DEMO_SESSIONS[targetRole]);
+
     setTimeout(() => {
       setLoading(false);
-      if (email.includes("owner")) {
-        router.push("/owner/dashboard");
-      } else if (email.includes("admin@sahabat") || email.includes("kasir")) {
-        router.push("/admin/dashboard");
-      } else if (email.includes("mekanik") || email.includes("mechanic")) {
-        router.push("/mechanic/dashboard");
-      } else if (email.includes("superadmin")) {
-        router.push("/super-admin/dashboard");
-      } else {
-        router.push("/customer/dashboard");
-      }
-    }, 400);
+      router.push(targetRoute);
+    }, 300);
   };
 
   const handleQuickLogin = (roleEmail: string, destination: string) => {
     setEmail(roleEmail);
     setPassword("password123");
     setLoading(true);
+    let role: UserRole = "customer";
+    if (destination.startsWith("/owner")) role = "workshop_owner";
+    else if (destination.startsWith("/admin")) role = "workshop_admin";
+    else if (destination.startsWith("/mechanic")) role = "mechanic";
+    else if (destination.startsWith("/super-admin")) role = "super_admin";
+    setActiveSession(DEMO_SESSIONS[role]);
     setTimeout(() => {
       setLoading(false);
       router.push(destination);
-    }, 300);
+    }, 250);
   };
 
   return (

@@ -124,6 +124,8 @@ export type WorkOrderStatus =
   | "waiting_approval"
   | "in_progress"
   | "waiting_parts"
+  | "work_done"
+  | "awaiting_payment"
   | "completed"
   | "delivered"
   | "cancelled";
@@ -162,6 +164,14 @@ export interface WorkOrder {
   customerApprovalStatus: "pending" | "approved" | "rejected";
   approvedAt?: string;
   finalNotes?: string;
+  workResult?: string;
+  completedByMechanicId?: string;
+  completedByMechanicName?: string;
+  mechanicCompletedAt?: string;
+  paidAt?: string;
+  invoiceId?: string;
+  invoiceNumber?: string;
+  invoiceStatus?: InvoiceStatus;
   items?: WorkOrderItem[];
   customer?: Customer;
   vehicle?: Vehicle;

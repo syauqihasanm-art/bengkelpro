@@ -18,6 +18,7 @@ import {
   Plus,
 } from "lucide-react";
 import { formatIndonesianDate, formatRupiah } from "@/lib/utils";
+import { DEFAULT_MECHANIC_ID, getActiveSession } from "@/lib/session";
 
 export default function MechanicJobDetailPage() {
   const params = useParams();
@@ -27,6 +28,7 @@ export default function MechanicJobDetailPage() {
   const [workOrder, setWorkOrder] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [inspectionText, setInspectionText] = useState("");
+  const [workResultText, setWorkResultText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -45,11 +47,12 @@ export default function MechanicJobDetailPage() {
   const fetchWorkOrder = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/work-orders?id=${id}`);
+      const res = await fetch(`/api/work-orders?id=${id}`, { cache: "no-store" });
       const data = await res.json();
       if (data.workOrder) {
         setWorkOrder(data.workOrder);
         setInspectionText(data.workOrder.inspectionFindings || "");
+        setWorkResultText(data.workOrder.workResult || data.workOrder.finalNotes || "");
       }
     } catch (err) {
       console.error(err);
@@ -79,24 +82,45 @@ export default function MechanicJobDetailPage() {
     setSubmitting(true);
     setErrorMsg(null);
     try {
+      const session = getActiveSession("mechanic");
+      const mechanicId = session.mechanicId || session.userId || DEFAULT_MECHANIC_ID;
+      const isCompleteAction = status === "work_done" || status === "completed";
+
       const res = await fetch("/api/work-orders", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id,
-          status,
-          notes: inspectionText,
-          inspectionFindings: inspectionText,
-        }),
+        body: JSON.stringify(
+          isCompleteAction
+            ? {
+                id,
+                action: "mechanic_complete",
+                mechanicId,
+                inspectionFindings: inspectionText,
+                workResult:
+                  workResultText.trim() ||
+                  inspectionText.trim() ||
+                  "Pekerjaan servis telah diselesaikan oleh mekanik.",
+              }
+            : {
+                id,
+                status,
+                notes: workResultText || inspectionText,
+                workResult: workResultText || undefined,
+                inspectionFindings: inspectionText,
+              }
+        ),
       });
 
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Gagal memperbarui status SPK");
 
-      if (status === "completed") {
-        setNotification("Pekerjaan telah selesai! Faktur otomatis diterbitkan ke meja Kasir/Admin.");
+      if (isCompleteAction) {
+        setNotification(
+          json.message ||
+            "Pekerjaan berhasil diselesaikan (Selesai Dikerjakan) dan otomatis masuk ke antrean Admin/Kasir."
+        );
       } else {
-        setNotification(`Status pengerjaan berhasil diperbarui menjadi ${status.toUpperCase()}!`);
+        setNotification("Status pengerjaan berhasil diperbarui menjadi Sedang Dikerjakan!");
       }
       setTimeout(() => setNotification(null), 4000);
       fetchWorkOrder();
@@ -118,6 +142,7 @@ export default function MechanicJobDetailPage() {
         body: JSON.stringify({
           id,
           inspectionFindings: inspectionText,
+          workResult: workResultText,
         }),
       });
 
@@ -241,7 +266,7 @@ export default function MechanicJobDetailPage() {
                     Dibuat: {formatIndonesianDate(workOrder.createdAt, true)}
                   </div>
                 </div>
-                <Badge status={workOrder.status} size="md" />
+                <Badge status={workOrder.invoiceStatus === "paid" || workOrder.paidAt ? "paid" : workOrder.status} size="md" />
               </div>
 
               {/* Vehicle & Customer Info Card */}
@@ -288,10 +313,21 @@ export default function MechanicJobDetailPage() {
                   </button>
                 </div>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={inspectionText}
                   onChange={(e) => setInspectionText(e.target.value)}
                   placeholder="Tuliskan kondisi part, keausan rem, kelayakan oli, atau temuan fisik lainnya..."
+                  className="w-full p-3 rounded-xl border border-bengkel-border text-xs focus:outline-none focus:border-bengkel-orange"
+                />
+
+                <h4 className="text-xs font-bold text-bengkel-navy uppercase tracking-wider pt-2">
+                  Hasil Pekerjaan & Tindakan Perbaikan Mekanik:
+                </h4>
+                <textarea
+                  rows={2}
+                  value={workResultText}
+                  onChange={(e) => setWorkResultText(e.target.value)}
+                  placeholder="Tuliskan tindakan perbaikan yang sudah selesai dikerjakan mekanik..."
                   className="w-full p-3 rounded-xl border border-bengkel-border text-xs focus:outline-none focus:border-bengkel-orange"
                 />
               </div>
@@ -302,7 +338,7 @@ export default function MechanicJobDetailPage() {
                   <h4 className="text-xs font-bold text-bengkel-navy uppercase tracking-wider">
                     Daftar Pekerjaan & Suku Cadang Terkait:
                   </h4>
-                  {workOrder.status !== "completed" && (
+                  {!["work_done", "awaiting_payment", "completed", "delivered", "cancelled"].includes(workOrder.status) && (
                     <button
                       type="button"
                       onClick={() => setItemModalOpen(true)}
@@ -342,26 +378,42 @@ export default function MechanicJobDetailPage() {
               </div>
 
               {/* Action Buttons for Mechanic */}
-              <div className="pt-4 border-t border-gray-100 flex flex-wrap items-center justify-end gap-3">
-                {workOrder.status !== "in_progress" && workOrder.status !== "completed" && (
-                  <button
-                    onClick={() => handleUpdateStatus("in_progress")}
-                    disabled={submitting}
-                    className="px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-xs transition-colors"
-                  >
-                    Mulai Pengerjaan Servis
-                  </button>
-                )}
+              <div className="pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
+                {["work_done", "awaiting_payment", "completed", "delivered"].includes(workOrder.status) ? (
+                  <div className="w-full p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-semibold flex items-center justify-between gap-2">
+                    <span>
+                      {workOrder.status === "work_done"
+                        ? "Status: Selesai Dikerjakan. Pekerjaan telah masuk antrean Admin/Kasir untuk pembuatan invoice."
+                        : workOrder.status === "awaiting_payment"
+                        ? "Status: Menunggu Pembayaran di meja Admin/Kasir."
+                        : "Status: Lunas & Selesai."}
+                    </span>
+                    <Badge status={workOrder.invoiceStatus === "paid" || workOrder.paidAt ? "paid" : workOrder.status} size="sm" />
+                  </div>
+                ) : (
+                  <div className="w-full flex flex-wrap items-center justify-end gap-3">
+                    {workOrder.status !== "in_progress" && (
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateStatus("in_progress")}
+                        disabled={submitting}
+                        className="px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-xs transition-colors"
+                      >
+                        Mulai Pengerjaan Servis
+                      </button>
+                    )}
 
-                {workOrder.status === "in_progress" && (
-                  <button
-                    onClick={() => handleUpdateStatus("completed")}
-                    disabled={submitting}
-                    className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition-colors flex items-center gap-1.5"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Tandai Servis Selesai & Kirim ke Kasir</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateStatus("work_done")}
+                      disabled={submitting}
+                      data-testid="detail-complete-wo"
+                      className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition-colors flex items-center gap-1.5 disabled:opacity-60"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>{submitting ? "Memproses..." : "Selesai & Kirim ke Kasir"}</span>
+                    </button>
+                  </div>
                 )}
               </div>
             </div>

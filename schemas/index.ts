@@ -83,21 +83,25 @@ export const workOrderSchema = z.object({
   odometerIn: z.coerce.number().min(0, "Odometer tidak boleh negatif"),
   customerComplaint: z.string().min(3, "Keluhan wajib diisi"),
   inspectionFindings: z.string().optional(),
-  status: z.enum([
-    "waiting",
-    "inspection",
-    "waiting_approval",
-    "in_progress",
-    "waiting_parts",
-    "completed",
-    "delivered",
-    "cancelled",
-  ]),
+  status: z
+    .enum([
+      "waiting",
+      "inspection",
+      "waiting_approval",
+      "in_progress",
+      "waiting_parts",
+      "work_done",
+      "awaiting_payment",
+      "completed",
+      "delivered",
+      "cancelled",
+    ])
+    .default("waiting"),
   items: z.array(workOrderItemSchema).default([]),
   discount: z.coerce.number().min(0).default(0),
   tax: z.coerce.number().min(0).default(0),
   finalNotes: z.string().optional(),
-  assignedMechanicIds: z.array(z.string().uuid()).optional(),
+  assignedMechanicIds: z.array(z.string().min(1)).optional(),
 });
 
 export type WorkOrderInput = z.infer<typeof workOrderSchema>;
@@ -156,11 +160,12 @@ export type PurchaseOrderInput = z.infer<typeof purchaseOrderSchema>;
 
 // Payment Recording Schema
 export const paymentSchema = z.object({
-  invoiceId: z.string().uuid("Invoice wajib dipilih"),
+  invoiceId: z.string().min(1, "Invoice wajib dipilih"),
   amount: z.coerce.number().min(1, "Jumlah pembayaran harus lebih dari 0"),
   paymentMethod: z.enum(["cash", "bank_transfer", "qris", "other"]),
   notes: z.string().optional(),
   externalReference: z.string().optional(),
+  qrisConfirmed: z.boolean().optional(),
 });
 
 export type PaymentInput = z.infer<typeof paymentSchema>;

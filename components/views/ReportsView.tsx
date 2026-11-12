@@ -32,7 +32,7 @@ export function ReportsView({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/reports")
+    fetch("/api/reports", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => setSummary(data.summary))
       .catch((err) => console.error(err))
@@ -237,7 +237,7 @@ export function ReportsView({
             <StatsCard
               title="Total Omzet Penerimaan Kas"
               value={formatRupiah(summary?.totalRevenue || 0)}
-              description="Dari seluruh pembayaran kasir yang lunas"
+              description={`Dari ${summary?.totalTransactions || 0} transaksi lunas terkonfirmasi`}
               icon={<DollarSign className="w-5 h-5" />}
               variant="green"
             />
@@ -315,6 +315,47 @@ export function ReportsView({
                 <span className="text-bengkel-green">{formatRupiah(summary?.netProfit || 0)}</span>
               </div>
             </div>
+          </div>
+
+          {/* Transaction Ledger Table */}
+          <div className="bg-white rounded-xl border border-bengkel-border shadow-2xs p-6 space-y-4">
+            <h3 className="text-base font-black text-bengkel-navy border-b border-gray-100 pb-3">
+              Rincian Transaksi Pembayaran Masuk ({summary?.totalTransactions || 0} Transaksi)
+            </h3>
+            {!summary?.recentTransactions?.length ? (
+              <div className="text-center py-6 text-xs text-bengkel-muted">Belum ada transaksi masuk.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-gray-50 border-b border-bengkel-border text-bengkel-muted uppercase font-bold">
+                    <tr>
+                      <th className="py-2.5 px-3">No. Pembayaran</th>
+                      <th className="py-2.5 px-3">Faktur / SPK</th>
+                      <th className="py-2.5 px-3">Pelanggan</th>
+                      <th className="py-2.5 px-3">Metode</th>
+                      <th className="py-2.5 px-3">Ref. Eksternal</th>
+                      <th className="py-2.5 px-3 text-right">Nominal</th>
+                      <th className="py-2.5 px-3 text-right">Waktu Konfirmasi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {summary.recentTransactions.map((tx: any) => (
+                      <tr key={tx.id}>
+                        <td className="py-2.5 px-3 font-mono font-bold text-bengkel-navy">{tx.paymentNumber}</td>
+                        <td className="py-2.5 px-3 font-mono text-bengkel-muted">
+                          {tx.invoiceNumber} {tx.workOrderNumber !== "-" ? `(${tx.workOrderNumber})` : ""}
+                        </td>
+                        <td className="py-2.5 px-3 font-semibold text-bengkel-navy">{tx.customerName}</td>
+                        <td className="py-2.5 px-3 uppercase font-bold text-emerald-700">{tx.paymentMethod}</td>
+                        <td className="py-2.5 px-3 font-mono text-bengkel-muted">{tx.externalReference || "-"}</td>
+                        <td className="py-2.5 px-3 text-right font-bold text-emerald-700">{formatRupiah(tx.amount)}</td>
+                        <td className="py-2.5 px-3 text-right text-bengkel-muted">{formatIndonesianDate(tx.paymentDate, true)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </main>
       </div>

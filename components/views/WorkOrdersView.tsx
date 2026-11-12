@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { Badge } from "@/components/Badge";
@@ -37,12 +38,14 @@ export function WorkOrdersView({
   const [customers, setCustomers] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [mechanics, setMechanics] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [notification, setNotification] = useState<string | null>(null);
   const [selectedWO, setSelectedWO] = useState<any | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   // Form states for creating new work order
   const [formData, setFormData] = useState({
@@ -52,6 +55,7 @@ export function WorkOrdersView({
     customerComplaint: "",
     inspectionFindings: "",
     status: "waiting",
+    assignedMechanicIds: [] as string[],
     items: [
       {
         itemType: "service",
@@ -68,36 +72,49 @@ export function WorkOrdersView({
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [woRes, custRes, vehRes, prodRes] = await Promise.all([
-        fetch("/api/work-orders"),
-        fetch("/api/customers"),
-        fetch("/api/vehicles"),
-        fetch("/api/inventory"),
+      const [woRes, custRes, vehRes, prodRes, mechRes] = await Promise.all([
+        fetch("/api/work-orders", { cache: "no-store" }),
+        fetch("/api/customers", { cache: "no-store" }),
+        fetch("/api/vehicles", { cache: "no-store" }),
+        fetch("/api/inventory", { cache: "no-store" }),
+        fetch("/api/mechanics", { cache: "no-store" }),
       ]);
 
       const woData = await woRes.json();
       const custData = await custRes.json();
       const vehData = await vehRes.json();
       const prodData = await prodRes.json();
+      const mechData = await mechRes.json();
 
       setWorkOrders(woData.workOrders || []);
       setCustomers(custData.customers || []);
       setVehicles(vehData.vehicles || []);
       setProducts(prodData.products || []);
+      setMechanics(mechData.mechanics || []);
 
-      if (custData.customers?.length > 0 && !formData.customerId) {
-        setFormData((prev) => ({
+      setFormData((prev) => {
+        const nextCustId = prev.customerId || custData.customers?.[0]?.id || "";
+        const matchingVeh = (vehData.vehicles || []).find((v: any) => v.customerId === nextCustId);
+        const nextVehId = prev.vehicleId || matchingVeh?.id || vehData.vehicles?.[0]?.id || "";
+        const nextMechIds =
+          prev.assignedMechanicIds.length > 0
+            ? prev.assignedMechanicIds
+            : mechData.mechanics?.[0]?.id
+            ? [mechData.mechanics[0].id]
+            : [];
+        return {
           ...prev,
-          customerId: custData.customers[0].id,
-          vehicleId: vehData.vehicles?.[0]?.id || "",
-        }));
-      }
+          customerId: nextCustId,
+          vehicleId: nextVehId,
+          assignedMechanicIds: nextMechIds,
+        };
+      });
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
-  }, [formData.customerId]);
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -127,19 +144,65 @@ export function WorkOrdersView({
         return;
       }
 
-      if (status === "completed") {
+      if (status === "work_done") {
         setNotification(
-          `SPK #${json.workOrder?.workOrderNumber || "SPK"} berhasil diselesaikan! Faktur lunas otomatis dan pembayaran Rp ${(json.workOrder?.grandTotal || 0).toLocaleString()} telah masuk ke pendapatan kas bengkel.`
+          `SPK #${json.workOrder?.workOrderNumber || "SPK"} berstatus Selesai Dikerjakan dan masuk antrean Admin/Kasir untuk pembuatan invoice.`
         );
-        setTimeout(() => setNotification(null), 6000);
+        setTimeout(() => setNotification(null), 5000);
+      } else if (status === "completed") {
+        setNotification(`Status SPK #${json.workOrder?.workOrderNumber || "SPK"} berhasil diperbarui.`);
+        setTimeout(() => setNotification(null), 5000);
       }
 
-      fetchData();
+      await fetchData();
       if (selectedWO?.id === id) {
         setSelectedWO(json.workOrder);
       }
     } catch (err: any) {
       alert(err.message || "Terjadi kesalahan memperbarui SPK");
+    }
+  };
+
+  const handleAssignMechanic = async (workOrderId: string, mechanicId: string) => {
+    try {
+      const res = await fetch("/api/work-orders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: workOrderId,
+          assignedMechanicIds: mechanicId ? [mechanicId] : [],
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Gagal menugaskan mekanik.");
+      setNotification(`Mekanik berhasil ditugaskan ke SPK #${json.workOrder?.workOrderNumber}.`);
+      await fetchData();
+      if (selectedWO?.id === workOrderId) {
+        setSelectedWO(json.workOrder);
+      }
+    } catch (err: any) {
+      alert(err.message || "Gagal memperbarui penugasan mekanik.");
+    }
+  };
+
+  const handleCreateInvoiceFromWO = async (wo: any) => {
+    try {
+      const res = await fetch("/api/invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "create", workOrderId: wo.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Gagal menerbitkan invoice dari SPK.");
+      setNotification(
+        `Invoice ${json.invoice?.invoiceNumber} berhasil diterbitkan! Status SPK kini Menunggu Pembayaran di kasir.`
+      );
+      await fetchData();
+      if (selectedWO?.id === wo.id && json.workOrder) {
+        setSelectedWO(json.workOrder);
+      }
+    } catch (err: any) {
+      alert(err.message || "Gagal menerbitkan invoice.");
     }
   };
 
@@ -404,14 +467,33 @@ export function WorkOrdersView({
           )}
 
           {/* Top Control Bar */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-xl border border-bengkel-border shadow-2xs">
-            <div className="text-xs text-bengkel-muted">
-              Total SPK Terdaftar: <span className="font-bold text-bengkel-navy">{workOrders.length}</span>
+          <div className="flex flex-col md:flex-row items-center justify-between gap-3 bg-white p-4 rounded-xl border border-bengkel-border shadow-2xs">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {[
+                { key: "all", label: `Semua (${workOrders.length})` },
+                { key: "active", label: "Aktif / Dikerjakan" },
+                { key: "work_done", label: "Selesai Dikerjakan" },
+                { key: "awaiting_payment", label: "Menunggu Pembayaran" },
+                { key: "completed", label: "Lunas" },
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setStatusFilter(tab.key)}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                    statusFilter === tab.key
+                      ? "bg-bengkel-navy text-white"
+                      : "bg-gray-100 text-bengkel-text hover:bg-gray-200"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
 
             <button
               onClick={() => setModalOpen(true)}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-bengkel-orange text-white text-xs font-bold hover:bg-bengkel-orange-hover shadow-xs transition-colors"
+              className="w-full md:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-bengkel-orange text-white text-xs font-bold hover:bg-bengkel-orange-hover shadow-xs transition-colors"
             >
               <Plus className="w-4 h-4" />
               <span>Buat SPK Baru</span>
@@ -447,7 +529,18 @@ export function WorkOrdersView({
                       </td>
                     </tr>
                   ) : (
-                    workOrders.map((wo) => (
+                    workOrders
+                      .filter((wo) => {
+                        if (statusFilter === "all") return true;
+                        if (statusFilter === "active") {
+                          return ["waiting", "inspection", "waiting_approval", "in_progress", "waiting_parts"].includes(wo.status);
+                        }
+                        if (statusFilter === "completed") {
+                          return wo.status === "completed" || wo.status === "delivered" || wo.invoiceStatus === "paid";
+                        }
+                        return wo.status === statusFilter;
+                      })
+                      .map((wo) => (
                       <tr key={wo.id} className="hover:bg-gray-50/70 transition-colors">
                         <td className="py-3.5 px-4">
                           <span className="font-mono font-bold text-xs text-bengkel-navy bg-gray-100 px-2 py-1 rounded-md border border-gray-200">
@@ -459,6 +552,11 @@ export function WorkOrdersView({
                           <div className="text-[11px] text-bengkel-muted">
                             {wo.vehicle?.brand} {wo.vehicle?.model} ({wo.vehicle?.licensePlate})
                           </div>
+                          {wo.assignedMechanics?.length > 0 && (
+                            <div className="text-[10px] text-bengkel-orange font-semibold mt-0.5">
+                              Mekanik: {wo.assignedMechanics.map((m: any) => m.name).join(", ")}
+                            </div>
+                          )}
                         </td>
                         <td className="py-3.5 px-4 max-w-xs">
                           <div className="text-bengkel-text font-medium truncate">{wo.customerComplaint}</div>
@@ -486,13 +584,13 @@ export function WorkOrdersView({
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-center">
-                          <Badge status={wo.status} />
+                          <Badge status={wo.invoiceStatus === "paid" || wo.paidAt ? "paid" : wo.status} />
                         </td>
                         <td className="py-3.5 px-4 text-right font-bold text-bengkel-navy">
                           {formatRupiah(wo.grandTotal)}
                         </td>
                         <td className="py-3.5 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
+                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
                             <button
                               onClick={() => setSelectedWO(wo)}
                               className="px-2 py-1 text-xs font-semibold rounded-md border border-gray-200 text-bengkel-navy hover:bg-gray-100 flex items-center gap-1 transition-colors"
@@ -501,7 +599,7 @@ export function WorkOrdersView({
                               <Eye className="w-3.5 h-3.5 text-bengkel-orange" />
                               <span>Detail</span>
                             </button>
-                            {wo.status !== "completed" && (
+                            {["waiting", "inspection", "waiting_approval", "in_progress", "waiting_parts"].includes(wo.status) && (
                               <>
                                 {wo.customerApprovalStatus === "pending" && (
                                   <button
@@ -527,21 +625,40 @@ export function WorkOrdersView({
                                     Kerjakan
                                   </button>
                                 )}
-                                <button
-                                  onClick={() => handleUpdateWOStatus(wo.id, "completed", "approved", true)}
-                                  className="px-2.5 py-1 text-xs font-bold rounded-md bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs flex items-center gap-1 transition-colors"
-                                  title="Selesaikan servis dan bayar lunas otomatis ke pendapatan kas"
-                                >
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  <span>Selesai & Bayar Lunas</span>
-                                </button>
+                                {wo.status === "in_progress" && (
+                                  <button
+                                    onClick={() => handleUpdateWOStatus(wo.id, "work_done", "approved")}
+                                    className="px-2.5 py-1 text-xs font-bold rounded-md bg-teal-600 text-white hover:bg-teal-700 flex items-center gap-1"
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span>Tandai Selesai Kerja</span>
+                                  </button>
+                                )}
                               </>
                             )}
-                            {wo.status === "completed" && (
+                            {wo.status === "work_done" && (
+                              <button
+                                onClick={() => handleCreateInvoiceFromWO(wo)}
+                                className="px-2.5 py-1 text-xs font-bold rounded-md bg-bengkel-orange text-white hover:bg-bengkel-orange-hover shadow-xs flex items-center gap-1 transition-colors"
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                                <span>Buat Invoice</span>
+                              </button>
+                            )}
+                            {wo.status === "awaiting_payment" && (
+                              <Link
+                                href={`${role === "workshop_owner" ? "/owner/invoices" : "/admin/invoices"}${wo.invoiceId ? `?invoiceId=${wo.invoiceId}` : ""}`}
+                                className="px-2.5 py-1 text-xs font-bold rounded-md bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs flex items-center gap-1 transition-colors"
+                              >
+                                <DollarSign className="w-3.5 h-3.5" />
+                                <span>Bayar di Kasir</span>
+                              </Link>
+                            )}
+                            {(wo.status === "completed" || wo.status === "delivered" || wo.invoiceStatus === "paid") && (
                               <div className="flex items-center gap-1.5">
                                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
                                   <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                  <span>Lunas & Selesai</span>
+                                  <span>Lunas</span>
                                 </span>
                                 <button
                                   onClick={() => handlePrintInvoiceForWO(wo)}
@@ -590,7 +707,15 @@ export function WorkOrdersView({
                       <select
                         required
                         value={formData.customerId}
-                        onChange={(e) => setFormData({ ...formData, customerId: e.target.value })}
+                        onChange={(e) => {
+                          const cid = e.target.value;
+                          const matchingVeh = vehicles.find((v) => v.customerId === cid);
+                          setFormData({
+                            ...formData,
+                            customerId: cid,
+                            vehicleId: matchingVeh ? matchingVeh.id : formData.vehicleId,
+                          });
+                        }}
                         className="w-full px-3 py-2 rounded-lg border border-bengkel-border focus:outline-none focus:border-bengkel-orange text-xs bg-white"
                       >
                         {customers.map((c) => (
@@ -633,6 +758,30 @@ export function WorkOrdersView({
                         onChange={(e) => setFormData({ ...formData, odometerIn: parseInt(e.target.value) || 0 })}
                         className="w-full px-3 py-2 rounded-lg border border-bengkel-border focus:outline-none focus:border-bengkel-orange text-xs"
                       />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-bengkel-text uppercase tracking-wider mb-1">
+                        Tugaskan Mekanik *
+                      </label>
+                      <select
+                        required
+                        value={formData.assignedMechanicIds[0] || ""}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            assignedMechanicIds: e.target.value ? [e.target.value] : [],
+                          })
+                        }
+                        className="w-full px-3 py-2 rounded-lg border border-bengkel-border focus:outline-none focus:border-bengkel-orange text-xs bg-white"
+                      >
+                        <option value="">-- Pilih Mekanik --</option>
+                        {mechanics.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name} ({m.specialization})
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 
@@ -769,7 +918,7 @@ export function WorkOrdersView({
                       <span className="font-mono font-black text-sm text-bengkel-navy bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">
                         {selectedWO.workOrderNumber}
                       </span>
-                      <Badge status={selectedWO.status} />
+                      <Badge status={selectedWO.invoiceStatus === "paid" || selectedWO.paidAt ? "paid" : selectedWO.status} />
                     </div>
                     <div className="text-xs text-bengkel-muted mt-1">
                       Diterbitkan pada {formatIndonesianDate(selectedWO.createdAt, true)}
@@ -809,6 +958,34 @@ export function WorkOrdersView({
                       <span className="text-bengkel-text">{selectedWO.inspectionFindings}</span>
                     </div>
                   )}
+                  {(selectedWO.workResult || selectedWO.finalNotes) && (
+                    <div className="sm:col-span-2">
+                      <span className="font-bold text-bengkel-navy">Hasil Pekerjaan Mekanik: </span>
+                      <span className="text-bengkel-text">{selectedWO.workResult || selectedWO.finalNotes}</span>
+                    </div>
+                  )}
+                  <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-200">
+                    <div>
+                      <span className="font-bold text-bengkel-navy">Mekanik Bertugas: </span>
+                      <span className="text-bengkel-orange font-bold">
+                        {selectedWO.assignedMechanics?.map((m: any) => m.name).join(", ") || "Belum ditugaskan"}
+                      </span>
+                    </div>
+                    {!["completed", "delivered"].includes(selectedWO.status) && (
+                      <select
+                        value={selectedWO.assignedMechanics?.[0]?.id || ""}
+                        onChange={(e) => handleAssignMechanic(selectedWO.id, e.target.value)}
+                        className="px-2.5 py-1 rounded-lg border border-gray-200 bg-white text-xs"
+                      >
+                        <option value="">-- Ubah Mekanik --</option>
+                        {mechanics.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
                 </div>
 
                 {/* Rincian Jasa & Suku Cadang */}
@@ -884,7 +1061,7 @@ export function WorkOrdersView({
                   </button>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    {selectedWO.status !== "completed" && (
+                    {["waiting", "inspection", "waiting_approval", "in_progress", "waiting_parts"].includes(selectedWO.status) && (
                       <>
                         {selectedWO.customerApprovalStatus === "pending" && (
                           <button
@@ -910,21 +1087,40 @@ export function WorkOrdersView({
                             Kerjakan
                           </button>
                         )}
-                        <button
-                          onClick={() => handleUpdateWOStatus(selectedWO.id, "completed", "approved", true)}
-                          className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5"
-                          title="Selesaikan servis dan bayar lunas langsung ke pendapatan kas"
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>Selesai &amp; Bayar Lunas</span>
-                        </button>
+                        {selectedWO.status === "in_progress" && (
+                          <button
+                            onClick={() => handleUpdateWOStatus(selectedWO.id, "work_done", "approved")}
+                            className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>Tandai Selesai Dikerjakan</span>
+                          </button>
+                        )}
                       </>
                     )}
-                    {selectedWO.status === "completed" && (
+                    {selectedWO.status === "work_done" && (
+                      <button
+                        onClick={() => handleCreateInvoiceFromWO(selectedWO)}
+                        className="px-4 py-2 rounded-xl bg-bengkel-orange hover:bg-bengkel-orange-hover text-white text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5"
+                      >
+                        <FileText className="w-4 h-4" />
+                        <span>Buat &amp; Terbitkan Invoice</span>
+                      </button>
+                    )}
+                    {selectedWO.status === "awaiting_payment" && (
+                      <Link
+                        href={`${role === "workshop_owner" ? "/owner/invoices" : "/admin/invoices"}${selectedWO.invoiceId ? `?invoiceId=${selectedWO.invoiceId}` : ""}`}
+                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5"
+                      >
+                        <DollarSign className="w-4 h-4" />
+                        <span>Konfirmasi Pembayaran Kasir</span>
+                      </Link>
+                    )}
+                    {(selectedWO.status === "completed" || selectedWO.status === "delivered" || selectedWO.invoiceStatus === "paid") && (
                       <div className="flex items-center gap-2">
                         <span className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
                           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                          <span>Lunas &amp; Selesai</span>
+                          <span>Lunas</span>
                         </span>
                         <button
                           onClick={() => handlePrintInvoiceForWO(selectedWO)}

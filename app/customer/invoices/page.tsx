@@ -13,7 +13,7 @@ export default function CustomerInvoicesPage() {
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
 
   useEffect(() => {
-    fetch("/api/invoices")
+    fetch("/api/invoices", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => setInvoices(data.invoices || []))
       .catch(console.error)
@@ -50,6 +50,7 @@ export default function CustomerInvoicesPage() {
             .grand-total { font-weight: bold; font-size: 15px; border-top: 2px solid #101d35; padding-top: 6px; }
             .status-badge { display: inline-block; padding: 4px 10px; border-radius: 99px; font-weight: bold; font-size: 11px; text-transform: uppercase; }
             .status-paid { background: #dcfce7; color: #15803d; }
+            .status-unpaid { background: #fee2e2; color: #b91c1c; }
             .footer { margin-top: 80px; text-align: center; font-size: 11px; color: #888; border-top: 1px dashed #ccc; padding-top: 12px; }
           </style>
         </head>
@@ -101,7 +102,7 @@ export default function CustomerInvoicesPage() {
             <div><span>Sudah Dibayar:</span><span>${formatRupiah(invoice.paidAmount)}</span></div>
             <div style="margin-top: 6px;">
               <span>Status:</span>
-              <span class="status-badge status-paid">${invoice.status.toUpperCase()}</span>
+              <span class="status-badge ${invoice.status === "paid" ? "status-paid" : "status-unpaid"}">${invoice.status === "paid" ? "LUNAS" : invoice.status === "partially_paid" ? "BAYAR SEBAGIAN" : "BELUM BAYAR"}</span>
             </div>
           </div>
 

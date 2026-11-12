@@ -25,17 +25,138 @@ import { calculateTotals } from "./utils";
 declare global {
   // eslint-disable-next-line no-var
   var __bengkelStore: BengkelStore | undefined;
+  // eslint-disable-next-line no-var
+  var __bengkelStoreVersion: number | undefined;
 }
 
 if (!globalThis.__bengkelStore) {
   globalThis.__bengkelStore = JSON.parse(JSON.stringify(initialStore));
+  globalThis.__bengkelStoreVersion = 0;
 }
 
 function getStore(): BengkelStore {
   if (!globalThis.__bengkelStore) {
     globalThis.__bengkelStore = JSON.parse(JSON.stringify(initialStore));
+    globalThis.__bengkelStoreVersion = 0;
   }
   return globalThis.__bengkelStore as BengkelStore;
+}
+
+export function getStoreSnapshot(): BengkelStore {
+  return getStore();
+}
+
+export function getStoreVersion(): number {
+  return globalThis.__bengkelStoreVersion || 0;
+}
+
+export function bumpStoreVersion(): number {
+  const next = Math.max(Date.now(), (globalThis.__bengkelStoreVersion || 0) + 1);
+  globalThis.__bengkelStoreVersion = next;
+  return next;
+}
+
+export function replaceStoreSnapshot(nextStore: BengkelStore, version: number): void {
+  globalThis.__bengkelStore = JSON.parse(JSON.stringify(nextStore));
+  globalThis.__bengkelStoreVersion = version;
+}
+
+const ACTIVE_WO_STATUSES: WorkOrder["status"][] = [
+  "waiting",
+  "inspection",
+  "waiting_approval",
+  "in_progress",
+  "waiting_parts",
+];
+
+const DONE_WO_STATUSES: WorkOrder["status"][] = [
+  "work_done",
+  "awaiting_payment",
+  "completed",
+  "delivered",
+];
+
+function enrichWorkOrder(store: BengkelStore, wo: WorkOrder): WorkOrder {
+  const inv = store.invoices.find((i) => i.workOrderId === wo.id);
+  const resolvedMechanics = (wo.assignedMechanics || []).map(
+    (m) => store.mechanics.find((sm) => sm.id === m.id || sm.userId === m.id) || m
+  );
+
+  wo.customer = store.customers.find((c) => c.id === wo.customerId);
+  wo.vehicle = store.vehicles.find((v) => v.id === wo.vehicleId);
+  wo.assignedMechanics = resolvedMechanics;
+  wo.invoiceId = inv?.id;
+  wo.invoiceNumber = inv?.invoiceNumber;
+  wo.invoiceStatus = inv?.status;
+  return wo;
+}
+
+function recalculateMechanicActiveCounts(store: BengkelStore, workshopId: string): void {
+  const workshopMechanics = store.mechanics.filter((m) => m.workshopId === workshopId);
+  for (const mech of workshopMechanics) {
+    const activeCount = store.workOrders.filter(
+      (wo) =>
+        wo.workshopId === workshopId &&
+        ACTIVE_WO_STATUSES.includes(wo.status) &&
+        (wo.assignedMechanics || []).some((am) => am.id === mech.id || am.userId === mech.id)
+    ).length;
+    mech.activeJobsCount = activeCount;
+  }
+}
+
+function upsertServiceHistoryForWorkOrder(
+  store: BengkelStore,
+  workshopId: string,
+  wo: WorkOrder,
+  invoice?: Invoice
+): ServiceHistory {
+  const approvedItems = (wo.items || []).filter((it) => it.isApproved);
+  const partNames = Array.from(
+    new Set(approvedItems.filter((i) => i.itemType === "part").map((i) => i.name))
+  ).join(", ");
+  const serviceNames = Array.from(
+    new Set(approvedItems.filter((i) => i.itemType === "service").map((i) => i.name))
+  ).join(", ");
+
+  const workCompleted = wo.workResult || wo.finalNotes || serviceNames || "Servis berkala";
+  const findings = wo.inspectionFindings || "Pemeriksaan rutin";
+  const existing = store.serviceHistories.find(
+    (sh) => sh.workOrderId === wo.id && sh.workshopId === workshopId
+  );
+
+  if (existing) {
+    if (invoice?.id) existing.invoiceId = invoice.id;
+    existing.odometer = wo.odometerIn;
+    existing.complaint = wo.customerComplaint;
+    existing.findings = findings;
+    existing.workCompleted = workCompleted;
+    existing.partsReplaced = partNames || "-";
+    existing.totalCost = invoice ? invoice.totalAmount : wo.grandTotal;
+    return existing;
+  }
+
+  const created: ServiceHistory = {
+    id: crypto.randomUUID(),
+    workshopId,
+    vehicleId: wo.vehicleId,
+    customerId: wo.customerId,
+    workOrderId: wo.id,
+    invoiceId: invoice?.id,
+    serviceDate: invoice?.invoiceDate || new Date().toISOString().split("T")[0],
+    odometer: wo.odometerIn,
+    complaint: wo.customerComplaint,
+    findings,
+    workCompleted,
+    partsReplaced: partNames || "-",
+    totalCost: invoice ? invoice.totalAmount : wo.grandTotal,
+    nextMaintenanceOdometer: wo.odometerIn + 4000,
+    nextMaintenanceDate: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+    reminderStatus: "pending",
+    createdAt: new Date().toISOString(),
+  };
+
+  store.serviceHistories.push(created);
+  return created;
 }
 
 export const db = {
@@ -288,24 +409,18 @@ export const db = {
   // WORK ORDERS & REPAIR WORKFLOW
   // ==========================================
   getWorkOrders(workshopId: string, status?: WorkOrder["status"]): WorkOrder[] {
-    return getStore()
-      .workOrders.filter((wo) => wo.workshopId === workshopId)
+    const store = getStore();
+    return store.workOrders
+      .filter((wo) => wo.workshopId === workshopId)
       .filter((wo) => !status || wo.status === status)
-      .map((wo) => ({
-        ...wo,
-        customer: getStore().customers.find((c) => c.id === wo.customerId),
-        vehicle: getStore().vehicles.find((v) => v.id === wo.vehicleId),
-      }));
+      .map((wo) => enrichWorkOrder(store, wo));
   },
 
   getWorkOrderById(workshopId: string, id: string): WorkOrder | undefined {
-    const wo = getStore().workOrders.find((w) => w.id === id && w.workshopId === workshopId);
+    const store = getStore();
+    const wo = store.workOrders.find((w) => w.id === id && w.workshopId === workshopId);
     if (!wo) return undefined;
-    return {
-      ...wo,
-      customer: getStore().customers.find((c) => c.id === wo.customerId),
-      vehicle: getStore().vehicles.find((v) => v.id === wo.vehicleId),
-    };
+    return enrichWorkOrder(store, wo);
   },
 
   createWorkOrder(workshopId: string, data: {
@@ -358,6 +473,10 @@ export const db = {
     const tax = Math.max(0, data.tax || 0);
     const grandTotal = Math.max(0, subtotal - discount + tax);
 
+    const assignedMechanics = (data.assignedMechanicIds || [])
+      .map((mechId) => store.mechanics.find((m) => m.workshopId === workshopId && (m.id === mechId || m.userId === mechId)))
+      .filter((m): m is Mechanic => Boolean(m));
+
     const newWO: WorkOrder = {
       id: workOrderId,
       workshopId,
@@ -377,6 +496,7 @@ export const db = {
       grandTotal,
       customerApprovalStatus: "pending",
       items,
+      assignedMechanics,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -395,7 +515,29 @@ export const db = {
       vehicle.currentOdometer = data.odometerIn;
     }
 
-    return newWO;
+    recalculateMechanicActiveCounts(store, workshopId);
+
+    return enrichWorkOrder(store, newWO);
+  },
+
+  assignMechanicsToWorkOrder(workshopId: string, workOrderId: string, mechanicIds: string[]): WorkOrder {
+    const store = getStore();
+    const wo = store.workOrders.find((w) => w.id === workOrderId && w.workshopId === workshopId);
+    if (!wo) throw new Error("Work order tidak ditemukan.");
+
+    const assigned = mechanicIds
+      .map((id) => store.mechanics.find((m) => m.workshopId === workshopId && (m.id === id || m.userId === id)))
+      .filter((m): m is Mechanic => Boolean(m));
+
+    if (mechanicIds.length > 0 && assigned.length === 0) {
+      throw new Error("Mekanik yang dipilih tidak ditemukan.");
+    }
+
+    wo.assignedMechanics = assigned;
+    wo.updatedAt = new Date().toISOString();
+    recalculateMechanicActiveCounts(store, workshopId);
+
+    return enrichWorkOrder(store, wo);
   },
 
   /**
@@ -450,24 +592,52 @@ export const db = {
     const wo = store.workOrders.find((w) => w.id === id && w.workshopId === workshopId);
     if (!wo) throw new Error("Work order tidak ditemukan.");
 
-    // If transitioning to completed, ensure customer approval status is approved so parts are deducted
-    if (status === "completed") {
+    const prevStatus = wo.status;
+    const now = new Date().toISOString();
+
+    if (status === "work_done" || status === "awaiting_payment" || status === "completed") {
       wo.customerApprovalStatus = "approved";
-      if (!wo.approvedAt) wo.approvedAt = new Date().toISOString();
+      if (!wo.approvedAt) wo.approvedAt = now;
     }
 
-    // If transitioning to in_progress or completed, ensure parts deduction is processed safely
-    if ((status === "in_progress" || status === "completed") && wo.customerApprovalStatus === "approved") {
+    // Safely deduct un-deducted approved spare parts once
+    if (
+      (status === "in_progress" || status === "work_done" || status === "awaiting_payment" || status === "completed") &&
+      wo.customerApprovalStatus === "approved"
+    ) {
       this.deductWorkOrderParts(workshopId, id);
     }
 
     wo.status = status;
-    if (notes) wo.finalNotes = notes;
-    wo.updatedAt = new Date().toISOString();
+    if (notes) {
+      wo.finalNotes = notes;
+      if (status === "work_done" && !wo.workResult) {
+        wo.workResult = notes;
+      }
+    }
+    wo.updatedAt = now;
 
-    // If completed, automatically generate invoice and service history
+    if ((status === "work_done" || status === "completed") && !wo.mechanicCompletedAt && ACTIVE_WO_STATUSES.includes(prevStatus)) {
+      wo.mechanicCompletedAt = now;
+      const assigned = wo.assignedMechanics || [];
+      if (assigned.length > 0) {
+        wo.completedByMechanicId = assigned[0].id;
+        wo.completedByMechanicName = assigned[0].name;
+      }
+      for (const am of assigned) {
+        const mech = store.mechanics.find((m) => m.workshopId === workshopId && (m.id === am.id || m.userId === am.id));
+        if (mech) mech.completedJobsCount = (mech.completedJobsCount || 0) + 1;
+      }
+    }
+    recalculateMechanicActiveCounts(store, workshopId);
+
+    if (status === "work_done") {
+      upsertServiceHistoryForWorkOrder(store, workshopId, wo);
+    }
+
+    // Legacy completed path generates invoice & optional immediate cash settlement
     if (status === "completed") {
-      const invoice = this.generateInvoiceFromWorkOrder(workshopId, id);
+      const invoice = this.generateInvoiceFromWorkOrder(workshopId, id, true);
 
       if (autoSettle && invoice.status !== "paid") {
         this.recordPayment(workshopId, {
@@ -480,7 +650,80 @@ export const db = {
       }
     }
 
-    return wo;
+    return enrichWorkOrder(store, wo);
+  },
+
+  completeWorkOrderByMechanic(
+    workshopId: string,
+    workOrderId: string,
+    data: {
+      mechanicId: string;
+      inspectionFindings?: string;
+      workResult?: string;
+      notes?: string;
+    }
+  ): WorkOrder {
+    const store = getStore();
+    const wo = store.workOrders.find((w) => w.id === workOrderId && w.workshopId === workshopId);
+    if (!wo) throw new Error("Data SPK tidak ditemukan.");
+    if (wo.status === "cancelled") throw new Error("SPK yang telah dibatalkan tidak dapat diselesaikan.");
+    if (DONE_WO_STATUSES.includes(wo.status)) {
+      throw new Error("Pekerjaan SPK ini sudah berstatus selesai dikerjakan.");
+    }
+
+    const mech = store.mechanics.find(
+      (m) => m.workshopId === workshopId && (m.id === data.mechanicId || m.userId === data.mechanicId)
+    );
+    if (!mech) {
+      throw new Error("Data mekanik tidak ditemukan di bengkel ini.");
+    }
+
+    const assigned = wo.assignedMechanics || [];
+    if (assigned.length === 0) {
+      throw new Error("SPK ini belum ditugaskan ke mekanik manapun. Hubungi Admin/Kasir untuk penugasan mekanik.");
+    }
+
+    const isAssigned = assigned.some((m) => m.id === mech.id || m.userId === mech.id);
+    if (!isAssigned) {
+      throw new Error(
+        `Akses ditolak: SPK #${wo.workOrderNumber} ditugaskan ke ${assigned.map((m) => m.name).join(", ")}, bukan kepada Anda.`
+      );
+    }
+
+    const now = new Date().toISOString();
+    wo.customerApprovalStatus = "approved";
+    if (!wo.approvedAt) wo.approvedAt = now;
+
+    // Safe single deduction of any remaining un-deducted spare parts
+    this.deductWorkOrderParts(workshopId, wo.id);
+
+    if (data.inspectionFindings !== undefined && data.inspectionFindings.trim()) {
+      wo.inspectionFindings = data.inspectionFindings.trim();
+    }
+
+    const resultText = (data.workResult ?? data.notes ?? "").trim();
+    if (resultText) {
+      wo.workResult = resultText;
+      wo.finalNotes = resultText;
+    } else if (!wo.finalNotes) {
+      wo.finalNotes = `Pekerjaan servis telah diselesaikan oleh mekanik ${mech.name}.`;
+    }
+
+    const alreadyCountedDone = Boolean(wo.mechanicCompletedAt);
+    wo.status = "work_done";
+    wo.completedByMechanicId = mech.id;
+    wo.completedByMechanicName = mech.name;
+    wo.mechanicCompletedAt = wo.mechanicCompletedAt || now;
+    wo.updatedAt = now;
+
+    if (!alreadyCountedDone) {
+      mech.completedJobsCount = (mech.completedJobsCount || 0) + 1;
+    }
+    recalculateMechanicActiveCounts(store, workshopId);
+
+    upsertServiceHistoryForWorkOrder(store, workshopId, wo);
+
+    return enrichWorkOrder(store, wo);
   },
 
   addWorkOrderItem(
@@ -498,6 +741,11 @@ export const db = {
     const store = getStore();
     const wo = store.workOrders.find((w) => w.id === workOrderId && w.workshopId === workshopId);
     if (!wo) throw new Error("Work order tidak ditemukan.");
+
+    const existingInv = store.invoices.find((i) => i.workOrderId === wo.id);
+    if (existingInv?.status === "paid" || wo.paidAt) {
+      throw new Error("SPK sudah dibayar lunas dan tidak dapat ditambah item baru.");
+    }
 
     const newItem: WorkOrderItem = {
       id: crypto.randomUUID(),
@@ -527,18 +775,19 @@ export const db = {
     wo.grandTotal = Math.max(0, wo.subtotal - wo.discount + wo.tax);
     wo.updatedAt = new Date().toISOString();
 
-    // If work order is already in_progress or completed and it's an approved part, deduct stock
-    if ((wo.status === "in_progress" || wo.status === "completed") && newItem.isApproved) {
+    if (
+      (wo.status === "in_progress" || wo.status === "work_done" || wo.status === "awaiting_payment" || wo.status === "completed") &&
+      newItem.isApproved
+    ) {
       this.deductWorkOrderParts(workshopId, wo.id);
     }
 
-    // Also sync with invoice if one was already generated
-    const inv = store.invoices.find((i) => i.workOrderId === wo.id);
-    if (inv) {
-      if (!inv.items) inv.items = [];
-      inv.items.push({
+    // Sync with existing unpaid invoice if already created
+    if (existingInv) {
+      if (!existingInv.items) existingInv.items = [];
+      existingInv.items.push({
         id: crypto.randomUUID(),
-        invoiceId: inv.id,
+        invoiceId: existingInv.id,
         itemType: newItem.itemType,
         name: newItem.name,
         quantity: newItem.quantity,
@@ -546,12 +795,12 @@ export const db = {
         totalPrice: newItem.totalPrice,
         createdAt: new Date().toISOString(),
       });
-      inv.subtotal = wo.subtotal;
-      inv.totalAmount = wo.grandTotal;
-      inv.updatedAt = new Date().toISOString();
+      existingInv.subtotal = wo.subtotal;
+      existingInv.totalAmount = wo.grandTotal;
+      existingInv.updatedAt = new Date().toISOString();
     }
 
-    return wo;
+    return enrichWorkOrder(store, wo);
   },
 
   // ==========================================
@@ -767,10 +1016,12 @@ export const db = {
       .invoices.filter((inv) => inv.workshopId === workshopId)
       .map((inv) => {
         const wo = inv.workOrderId ? store.workOrders.find((w) => w.id === inv.workOrderId) : undefined;
+        const enrichedWo = wo ? enrichWorkOrder(store, wo) : undefined;
         const vehicle = wo ? store.vehicles.find((v) => v.id === wo.vehicleId) : undefined;
         return {
           ...inv,
-          workOrder: wo,
+          payments: store.payments.filter((p) => p.invoiceId === inv.id),
+          workOrder: enrichedWo,
           vehicle: vehicle
             ? {
                 id: vehicle.id,
@@ -790,11 +1041,12 @@ export const db = {
     const inv = store.invoices.find((i) => i.id === id && i.workshopId === workshopId);
     if (!inv) return undefined;
     const wo = inv.workOrderId ? store.workOrders.find((w) => w.id === inv.workOrderId) : undefined;
+    const enrichedWo = wo ? enrichWorkOrder(store, wo) : undefined;
     const vehicle = wo ? store.vehicles.find((v) => v.id === wo.vehicleId) : undefined;
     return {
       ...inv,
       payments: store.payments.filter((p) => p.invoiceId === inv.id),
-      workOrder: wo,
+      workOrder: enrichedWo,
       vehicle: vehicle
         ? {
             id: vehicle.id,
@@ -807,20 +1059,74 @@ export const db = {
     };
   },
 
-  generateInvoiceFromWorkOrder(workshopId: string, workOrderId: string): Invoice {
+  generateInvoiceFromWorkOrder(
+    workshopId: string,
+    workOrderId: string,
+    preserveCompletedStatus = false
+  ): Invoice {
     const store = getStore();
-    const wo = this.getWorkOrderById(workshopId, workOrderId);
-    if (!wo) throw new Error("Work order tidak ditemukan.");
+    const rawWo = store.workOrders.find((w) => w.id === workOrderId && w.workshopId === workshopId);
+    if (!rawWo) throw new Error("Work order tidak ditemukan.");
+    if (rawWo.status === "cancelled") {
+      throw new Error("SPK yang dibatalkan tidak dapat dibuatkan invoice.");
+    }
+
+    const now = new Date().toISOString();
+    rawWo.customerApprovalStatus = "approved";
+    if (!rawWo.approvedAt) rawWo.approvedAt = now;
+    this.deductWorkOrderParts(workshopId, rawWo.id);
+
+    // Recalculate SPK totals accurately
+    const approvedItems = (rawWo.items || []).filter((it) => it.isApproved);
+    rawWo.totalLabor = approvedItems
+      .filter((it) => it.itemType === "service")
+      .reduce((sum, it) => sum + it.totalPrice, 0);
+    rawWo.totalParts = approvedItems
+      .filter((it) => it.itemType === "part")
+      .reduce((sum, it) => sum + it.totalPrice, 0);
+    rawWo.subtotal = rawWo.totalLabor + rawWo.totalParts;
+    rawWo.grandTotal = Math.max(0, rawWo.subtotal - rawWo.discount + rawWo.tax);
 
     // Check if invoice already exists
-    const existing = store.invoices.find((i) => i.workOrderId === workOrderId);
-    if (existing) return existing;
+    const existing = store.invoices.find(
+      (i) => i.workOrderId === workOrderId && i.workshopId === workshopId
+    );
+    if (existing) {
+      if (existing.status !== "paid") {
+        existing.items = approvedItems.map((it) => ({
+          id: crypto.randomUUID(),
+          invoiceId: existing.id,
+          itemType: it.itemType,
+          name: it.name,
+          quantity: it.quantity,
+          unitPrice: it.unitPrice,
+          totalPrice: it.totalPrice,
+          createdAt: now,
+        }));
+        existing.subtotal = rawWo.subtotal;
+        existing.discount = rawWo.discount;
+        existing.taxAmount = rawWo.tax;
+        existing.totalAmount = rawWo.grandTotal;
+        existing.updatedAt = now;
 
-    const customer = store.customers.find((c) => c.id === wo.customerId);
+        if (!preserveCompletedStatus && rawWo.status === "work_done") {
+          rawWo.status = "awaiting_payment";
+          rawWo.updatedAt = now;
+        }
+      } else if (rawWo.status !== "delivered") {
+        rawWo.status = "completed";
+        rawWo.paidAt = rawWo.paidAt || now;
+      }
+
+      upsertServiceHistoryForWorkOrder(store, workshopId, rawWo, existing);
+      return this.getInvoiceById(workshopId, existing.id) || existing;
+    }
+
+    const customer = store.customers.find((c) => c.id === rawWo.customerId);
     const invoiceId = crypto.randomUUID();
     const invoiceNumber = `INV-${new Date().toISOString().slice(2, 4)}${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(store.invoices.length + 1).padStart(4, "0")}`;
 
-    const invoiceItems = (wo.items || []).filter((it) => it.isApproved).map((it) => ({
+    const invoiceItems = approvedItems.map((it) => ({
       id: crypto.randomUUID(),
       invoiceId,
       itemType: it.itemType,
@@ -828,59 +1134,42 @@ export const db = {
       quantity: it.quantity,
       unitPrice: it.unitPrice,
       totalPrice: it.totalPrice,
-      createdAt: new Date().toISOString(),
+      createdAt: now,
     }));
 
     const newInvoice: Invoice = {
       id: invoiceId,
       workshopId,
       invoiceNumber,
-      workOrderId: wo.id,
-      customerId: wo.customerId,
+      workOrderId: rawWo.id,
+      customerId: rawWo.customerId,
       customerName: customer ? customer.fullName : "Pelanggan",
-      invoiceDate: new Date().toISOString().split("T")[0],
-      dueDate: new Date().toISOString().split("T")[0],
-      subtotal: wo.subtotal,
-      discount: wo.discount,
+      invoiceDate: now.split("T")[0],
+      dueDate: now.split("T")[0],
+      subtotal: rawWo.subtotal,
+      discount: rawWo.discount,
       taxRate: 0,
-      taxAmount: wo.tax,
-      totalAmount: wo.grandTotal,
+      taxAmount: rawWo.tax,
+      totalAmount: rawWo.grandTotal,
       paidAmount: 0,
       status: "unpaid",
-      notes: `Faktur servis otomatis dari SPK #${wo.workOrderNumber}`,
+      notes: `Faktur servis dari SPK #${rawWo.workOrderNumber}`,
       items: invoiceItems,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
     };
 
     store.invoices.push(newInvoice);
 
-    // Save Service History
-    const vehicle = store.vehicles.find((v) => v.id === wo.vehicleId);
-    const partsNames = invoiceItems.filter((i) => i.itemType === "part").map((i) => i.name).join(", ");
-    const serviceNames = invoiceItems.filter((i) => i.itemType === "service").map((i) => i.name).join(", ");
+    if (!preserveCompletedStatus && rawWo.status !== "completed" && rawWo.status !== "delivered") {
+      rawWo.status = "awaiting_payment";
+      rawWo.updatedAt = now;
+    }
 
-    store.serviceHistories.push({
-      id: crypto.randomUUID(),
-      workshopId,
-      vehicleId: wo.vehicleId,
-      customerId: wo.customerId,
-      workOrderId: wo.id,
-      invoiceId: newInvoice.id,
-      serviceDate: newInvoice.invoiceDate,
-      odometer: wo.odometerIn,
-      complaint: wo.customerComplaint,
-      findings: wo.inspectionFindings || "Pemeriksaan rutin",
-      workCompleted: serviceNames || "Servis berkala",
-      partsReplaced: partsNames || "-",
-      totalCost: newInvoice.totalAmount,
-      nextMaintenanceOdometer: wo.odometerIn + 4000,
-      nextMaintenanceDate: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-      reminderStatus: "pending",
-      createdAt: new Date().toISOString(),
-    });
+    recalculateMechanicActiveCounts(store, workshopId);
+    upsertServiceHistoryForWorkOrder(store, workshopId, rawWo, newInvoice);
 
-    return newInvoice;
+    return this.getInvoiceById(workshopId, newInvoice.id) || newInvoice;
   },
 
   createDirectInvoice(workshopId: string, data: {
@@ -982,6 +1271,7 @@ export const db = {
     paymentMethod: Payment["paymentMethod"];
     notes?: string;
     externalReference?: string;
+    verifiedBy?: string;
     idempotencyKey?: string;
   }): Payment {
     const store = getStore();
@@ -994,12 +1284,24 @@ export const db = {
       if (existingPayment) return existingPayment;
     }
 
+    if (invoice.status === "paid") {
+      throw new Error(`Invoice #${invoice.invoiceNumber} sudah berstatus Lunas.`);
+    }
+    if (invoice.status === "cancelled" || invoice.status === "refunded") {
+      throw new Error(`Invoice #${invoice.invoiceNumber} sudah dibatalkan atau di-refund.`);
+    }
+
+    if (!data.amount || data.amount <= 0) {
+      throw new Error("Nominal pembayaran harus lebih dari Rp 0.");
+    }
+
     const remainingDue = invoice.totalAmount - invoice.paidAmount;
     if (data.amount > remainingDue) {
       throw new Error(`Nominal pembayaran (Rp ${data.amount.toLocaleString()}) melebihi sisa tagihan (Rp ${remainingDue.toLocaleString()}).`);
     }
 
-    const paymentNumber = `PAY-${new Date().toISOString().slice(2, 4)}${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(store.payments.length + 1).padStart(4, "0")}`;
+    const now = new Date().toISOString();
+    const paymentNumber = `PAY-${now.slice(2, 4)}${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(store.payments.length + 1).padStart(4, "0")}`;
 
     const payment: Payment = {
       id: crypto.randomUUID(),
@@ -1008,12 +1310,13 @@ export const db = {
       paymentNumber,
       amount: data.amount,
       paymentMethod: data.paymentMethod,
-      paymentDate: new Date().toISOString(),
+      paymentDate: now,
       externalReference: data.externalReference,
+      verifiedBy: data.verifiedBy,
       status: "success",
       notes: data.notes,
       idempotencyKey: data.idempotencyKey,
-      createdAt: new Date().toISOString(),
+      createdAt: now,
     };
 
     store.payments.push(payment);
@@ -1025,7 +1328,38 @@ export const db = {
     } else {
       invoice.status = "partially_paid";
     }
-    invoice.updatedAt = new Date().toISOString();
+    invoice.updatedAt = now;
+
+    // When invoice is fully paid, finalize linked Work Order, Booking, Mechanic counters, and Service History
+    if (invoice.status === "paid" && invoice.workOrderId) {
+      const wo = store.workOrders.find((w) => w.id === invoice.workOrderId && w.workshopId === workshopId);
+      if (wo) {
+        wo.paidAt = wo.paidAt || now;
+        if (wo.status !== "delivered" && wo.status !== "cancelled") {
+          wo.status = "completed";
+        }
+        wo.updatedAt = now;
+
+        if (!wo.mechanicCompletedAt) {
+          wo.mechanicCompletedAt = now;
+          for (const am of wo.assignedMechanics || []) {
+            const mech = store.mechanics.find((m) => m.workshopId === workshopId && (m.id === am.id || m.userId === am.id));
+            if (mech) mech.completedJobsCount = (mech.completedJobsCount || 0) + 1;
+          }
+        }
+        recalculateMechanicActiveCounts(store, workshopId);
+
+        if (wo.bookingId) {
+          const bkg = store.bookings.find((b) => b.id === wo.bookingId && b.workshopId === workshopId);
+          if (bkg) {
+            bkg.status = "completed";
+            bkg.updatedAt = now;
+          }
+        }
+
+        upsertServiceHistoryForWorkOrder(store, workshopId, wo, invoice);
+      }
+    }
 
     return payment;
   },
@@ -1055,7 +1389,9 @@ export const db = {
   // MECHANICS
   // ==========================================
   getMechanics(workshopId: string): Mechanic[] {
-    return getStore().mechanics.filter((m) => m.workshopId === workshopId);
+    const store = getStore();
+    recalculateMechanicActiveCounts(store, workshopId);
+    return store.mechanics.filter((m) => m.workshopId === workshopId);
   },
 
   createMechanic(workshopId: string, data: Omit<Mechanic, "id" | "workshopId" | "createdAt" | "activeJobsCount" | "completedJobsCount">): Mechanic {
@@ -1079,26 +1415,37 @@ export const db = {
     const store = getStore();
 
     // Only confirmed payments count towards cash revenue
-    const payments = store.payments.filter((p) => p.workshopId === workshopId && p.status === "success");
+    const payments = store.payments
+      .filter((p) => p.workshopId === workshopId && p.status === "success")
+      .sort((a, b) => new Date(b.paymentDate || b.createdAt).getTime() - new Date(a.paymentDate || a.createdAt).getTime());
     const totalRevenue = payments.reduce((sum, p) => sum + p.amount, 0);
 
-    // Service vs Parts Revenue reconciliation from paid invoices
-    const paidInvoices = store.invoices.filter((i) => i.workshopId === workshopId && (i.status === "paid" || i.status === "partially_paid"));
+    // Service vs Parts Revenue reconciliation prorated strictly by actual paid amounts
+    const paidInvoices = store.invoices.filter(
+      (i) => i.workshopId === workshopId && (i.status === "paid" || i.status === "partially_paid")
+    );
     let serviceRevenue = 0;
     let partsRevenue = 0;
 
     for (const inv of paidInvoices) {
+      const paidRatio = inv.status === "paid"
+        ? 1
+        : inv.totalAmount > 0
+        ? Math.min(1, inv.paidAmount / inv.totalAmount)
+        : 0;
+
       for (const it of inv.items || []) {
-        if (it.itemType === "service") serviceRevenue += it.totalPrice;
-        if (it.itemType === "part") partsRevenue += it.totalPrice;
+        const contribution = Math.round(it.totalPrice * paidRatio);
+        if (it.itemType === "service") serviceRevenue += contribution;
+        if (it.itemType === "part") partsRevenue += contribution;
       }
     }
 
-    // Cost of Goods Sold (COGS) from stock movements of type 'out' for work orders
+    // Cost of Goods Sold (COGS) from stock movements of type 'out'
     const stockOut = store.stockMovements.filter((sm) => sm.workshopId === workshopId && sm.movementType === "out");
     const cogs = stockOut.reduce((sum, sm) => sum + sm.quantity * sm.unitCost, 0);
 
-    // Operating Expenses
+    // Operating Expenses (kept distinct from revenue)
     const expenses = store.expenses.filter((e) => e.workshopId === workshopId);
     const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
 
@@ -1109,10 +1456,38 @@ export const db = {
     const totalVehicles = store.vehicles.filter((v) => v.workshopId === workshopId && !v.isArchived).length;
     const pendingBookings = store.bookings.filter((b) => b.workshopId === workshopId && b.status === "pending").length;
     const activeWorkOrders = store.workOrders.filter(
-      (wo) => wo.workshopId === workshopId && ["waiting", "inspection", "waiting_approval", "in_progress", "waiting_parts"].includes(wo.status)
+      (wo) => wo.workshopId === workshopId && ACTIVE_WO_STATUSES.includes(wo.status)
     ).length;
-    const completedServices = store.workOrders.filter((wo) => wo.workshopId === workshopId && ["completed", "delivered"].includes(wo.status)).length;
-    const lowStockCount = store.products.filter((p) => p.workshopId === workshopId && p.isActive && p.stockQuantity <= p.minStock).length;
+    const pendingBillingCount = store.workOrders.filter(
+      (wo) => wo.workshopId === workshopId && wo.status === "work_done"
+    ).length;
+    const awaitingPaymentCount = store.workOrders.filter(
+      (wo) => wo.workshopId === workshopId && wo.status === "awaiting_payment"
+    ).length;
+    const completedServices = store.workOrders.filter(
+      (wo) => wo.workshopId === workshopId && ["completed", "delivered"].includes(wo.status)
+    ).length;
+    const lowStockCount = store.products.filter(
+      (p) => p.workshopId === workshopId && p.isActive && p.stockQuantity <= p.minStock
+    ).length;
+
+    const recentTransactions = payments.slice(0, 20).map((p) => {
+      const inv = store.invoices.find((i) => i.id === p.invoiceId);
+      const wo = inv?.workOrderId ? store.workOrders.find((w) => w.id === inv.workOrderId) : undefined;
+      return {
+        id: p.id,
+        paymentNumber: p.paymentNumber,
+        invoiceId: p.invoiceId,
+        invoiceNumber: inv?.invoiceNumber || "-",
+        workOrderNumber: wo?.workOrderNumber || "-",
+        customerName: inv?.customerName || "Pelanggan",
+        paymentMethod: p.paymentMethod,
+        externalReference: p.externalReference,
+        amount: p.amount,
+        paymentDate: p.paymentDate || p.createdAt,
+        status: p.status,
+      };
+    });
 
     return {
       totalRevenue,
@@ -1122,12 +1497,17 @@ export const db = {
       grossProfit,
       totalExpenses,
       netProfit,
+      totalTransactions: payments.length,
+      paidInvoicesCount: paidInvoices.filter((i) => i.status === "paid").length,
       totalCustomers,
       totalVehicles,
       pendingBookings,
       activeWorkOrders,
+      pendingBillingCount,
+      awaitingPaymentCount,
       completedServices,
       lowStockCount,
+      recentTransactions,
     };
   },
 

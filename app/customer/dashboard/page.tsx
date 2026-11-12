@@ -17,10 +17,10 @@ export default function CustomerDashboardPage() {
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/vehicles"),
-      fetch("/api/bookings"),
-      fetch("/api/work-orders"),
-      fetch("/api/invoices"),
+      fetch("/api/vehicles", { cache: "no-store" }),
+      fetch("/api/bookings", { cache: "no-store" }),
+      fetch("/api/work-orders", { cache: "no-store" }),
+      fetch("/api/invoices", { cache: "no-store" }),
     ])
       .then(async ([vRes, bRes, wRes, iRes]) => {
         const vData = await vRes.json();
@@ -90,7 +90,7 @@ export default function CustomerDashboardPage() {
                     Progress Servis Kendaraan Anda Saat Ini
                   </span>
                 </div>
-                <Badge status={workOrders[0].status} />
+                <Badge status={workOrders[0].invoiceStatus === "paid" || workOrders[0].paidAt ? "paid" : workOrders[0].status} />
               </div>
 
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
